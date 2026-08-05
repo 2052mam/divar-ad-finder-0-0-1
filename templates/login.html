@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ورود | دیده‌بان دیوار</title>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#E4E9F2;font-family:Vazirmatn,Tahoma,sans-serif;color:#2C3347}
+    .box{background:#EDF1F8;padding:32px;border-radius:22px;width:min(380px,92vw);box-shadow:10px 10px 24px #AAB4C6,-10px -10px 24px #fff}
+    h1{margin:0 0 8px;font-size:1.4rem}
+    p{color:#707C8F;margin:0 0 18px;font-size:.9rem}
+    label{display:block;margin:12px 0 6px;font-size:.85rem;color:#707C8F}
+    input{width:100%;padding:12px;border:none;border-radius:12px;background:#EDF1F8;box-shadow:inset 4px 4px 9px #AAB4C6,inset -4px -4px 9px #fff;font-family:inherit}
+    button{width:100%;margin-top:18px;padding:13px;border:none;border-radius:12px;background:linear-gradient(145deg,#6C5DD3,#5347B0);color:#fff;font-weight:700;cursor:pointer;font-family:inherit}
+    .err{color:#C22448;font-size:.85rem;margin-top:10px}
+  </style>
+</head>
+<body>
+  <form class="box" method="post">
+    <h1>ورود به دیده‌بان</h1>
+    <p>برای دسترسی وارد شوید</p>
+    <label>نام کاربری</label>
+    <input name="username" autocomplete="username" required>
+    <label>رمز عبور</label>
+    <input name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">ورود</button>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  </form>
+</body>
+</html>

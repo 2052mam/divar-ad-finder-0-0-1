@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>دیده‌بان دیوار | مانیتور موبایل و خودرو</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg: #E4E9F2;
+  --bg-elevated: #EDF1F8;
+  --bg-sunken: #DBE1EC;
+  --shadow-d: #AAB4C6;
+  --shadow-l: #FFFFFF;
+  --ink: #2C3347;
+  --ink-soft: #707C8F;
+  --ink-faint: #9AA5B5;
+  --violet: #6C5DD3;
+  --violet-soft: #ECE9FB;
+  --violet-deep: #5347B0;
+  --teal: #0FA595;
+  --teal-soft: #DEF6F1;
+  --amber: #F2A620;
+  --amber-soft: #FBF0DA;
+  --rose: #EF5A79;
+  --rose-soft: #FCE7EC;
+  --blue: #3E7BFA;
+  --blue-soft: #E7EEFF;
+  --radius-lg: 26px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --radius-pill: 999px;
+  --font-display: 'Vazirmatn', Tahoma, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Vazirmatn', monospace;
+}
+*{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 12% -10%, #F1F4FA 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, #E9EDF6 0%, transparent 40%),
+    var(--bg);
+  color:var(--ink);
+  font-family:var(--font-display);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{ background:var(--violet); color:#fff; }
+::-webkit-scrollbar{ width:8px; height:8px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{ background:var(--shadow-d); border-radius:99px; }
+button, input, select{ font-family:inherit; }
+.app-shell{ max-width:1180px; margin:0 auto; padding:28px 20px 70px; }
+@keyframes dropIn{ from{ opacity:0; transform:translateY(-14px); } to{ opacity:1; transform:translateY(0); } }
+@keyframes fadeUp{ from{ opacity:0; transform:translateY(16px) scale(.98); } to{ opacity:1; transform:translateY(0) scale(1); } }
+@keyframes pulseRing{ 0%{ transform:scale(.6); opacity:.9; } 100%{ transform:scale(1.9); opacity:0; } }
+@keyframes floatSlow{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
+.hero{ text-align:center; padding:34px 16px 26px; animation:dropIn .6s ease both; position:relative; }
+.hero-badge{
+  display:inline-flex; align-items:center; gap:8px; font-size:.78rem; font-weight:700;
+  color:var(--violet-deep); background:var(--violet-soft); padding:7px 16px; border-radius:var(--radius-pill);
+  box-shadow: 4px 4px 10px var(--shadow-d), -4px -4px 10px var(--shadow-l); margin-bottom:14px;
+  animation:floatSlow 4.5s ease-in-out infinite;
+}
+.hero h1{ font-size:clamp(1.9rem, 4.5vw, 2.9rem); font-weight:800; margin:0 0 8px; letter-spacing:-.01em; }
+.hero p{ color:var(--ink-soft); font-size:1rem; margin:0; }
+.logout-link{
+  position:absolute; top:8px; inset-inline-end:0;
+  text-decoration:none; font-size:.8rem; font-weight:600; color:var(--ink-soft);
+  padding:8px 14px; border-radius:var(--radius-pill); background:var(--bg-elevated);
+  box-shadow: 3px 3px 8px var(--shadow-d), -3px -3px 8px var(--shadow-l);
+}
+.logout-link:hover{ color:var(--rose); }
+.console-tabs{
+  display:flex; gap:6px; justify-content:center; background:var(--bg-elevated); padding:6px;
+  border-radius:var(--radius-pill); box-shadow: inset 6px 6px 14px var(--shadow-d), inset -6px -6px 14px var(--shadow-l);
+  max-width:520px; margin:0 auto 26px; flex-wrap:wrap;
+}
+.console-tab{
+  flex:1; min-width:110px; border:none; background:transparent; color:var(--ink-soft);
+  font-weight:700; font-size:.92rem; padding:11px 14px; border-radius:var(--radius-pill); cursor:pointer; transition:all .25s ease;
+}
+.console-tab.active{ color:#fff; background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow: 4px 4px 10px var(--shadow-d), -2px -2px 8px var(--shadow-l); }
+.console-tab:not(.active):hover{ color:var(--ink); }
+.page-section{ display:none; }
+.page-section.active{ display:block; animation:fadeUp .45s ease both; }
+.section-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.section-head h2{ font-size:1.2rem; margin:0; font-weight:800; }
+.category-switch{ display:flex; justify-content:center; gap:14px; margin-bottom:22px; }
+.cat-btn{
+  border:none; cursor:pointer; font-weight:700; font-size:1rem; padding:13px 30px; border-radius:var(--radius-md);
+  background:var(--bg-elevated); color:var(--ink-soft); box-shadow: 6px 6px 14px var(--shadow-d), -6px -6px 14px var(--shadow-l); transition:all .2s ease;
+}
+.cat-btn:active{ transform:translateY(1px); }
+.cat-btn.active{ color:var(--violet-deep); box-shadow: inset 5px 5px 10px var(--shadow-d), inset -5px -5px 10px var(--shadow-l); }
+.panel{ background:var(--bg-elevated); border-radius:var(--radius-lg); padding:26px; box-shadow: 10px 10px 24px var(--shadow-d), -10px -10px 24px var(--shadow-l); margin-bottom:22px; }
+.module{ border-radius:var(--radius-md); padding:16px 18px; margin-bottom:16px; box-shadow: inset 4px 4px 10px var(--shadow-d), inset -4px -4px 10px var(--shadow-l); }
+.module-smart{ background:var(--violet-soft); }
+.module-avg{ background:var(--teal-soft); }
+.module-keyword{ background:var(--amber-soft); }
+.module-negative{ background:var(--rose-soft); }
+.switch-row{ display:flex; align-items:center; justify-content:space-between; gap:14px; cursor:pointer; }
+.switch-label strong{ display:block; font-size:.95rem; }
+.switch-label small{ display:block; color:var(--ink-soft); font-size:.78rem; margin-top:2px; }
+.neo-switch{ position:relative; width:52px; height:30px; flex:0 0 auto; border-radius:var(--radius-pill); background:var(--bg-elevated); box-shadow: inset 3px 3px 7px var(--shadow-d), inset -3px -3px 7px var(--shadow-l); }
+.neo-switch input{ position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; z-index:2; }
+.neo-switch .knob{ position:absolute; inset-inline-start:4px; top:4px; width:22px; height:22px; border-radius:50%; background:var(--bg-elevated); box-shadow: 3px 3px 6px var(--shadow-d), -3px -3px 6px var(--shadow-l); transition: inset-inline-start .25s cubic-bezier(.4,1.6,.5,1), background .25s ease; }
+.neo-switch input:checked ~ .knob{ inset-inline-start:26px; background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow: 0 0 0 4px rgba(108,93,211,.18); }
+.module-avg .neo-switch input:checked ~ .knob{ background:linear-gradient(145deg, var(--teal), #0C7E72); box-shadow: 0 0 0 4px rgba(15,165,149,.18); }
+.days-input{ display:flex; align-items:center; gap:10px; margin-top:14px; font-size:.85rem; color:var(--ink-soft); flex-wrap:wrap; }
+.days-input input{ width:74px; }
+label{ font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; margin-bottom:6px; }
+.neo-input, .neo-select{
+  width:100%; border:none; outline:none; background:var(--bg-elevated); color:var(--ink); font-size:.92rem;
+  padding:12px 14px; border-radius:var(--radius-sm); box-shadow: inset 4px 4px 9px var(--shadow-d), inset -4px -4px 9px var(--shadow-l); transition: box-shadow .2s ease;
+}
+.neo-input:focus, .neo-select:focus{ box-shadow: inset 4px 4px 9px var(--shadow-d), inset -4px -4px 9px var(--shadow-l), 0 0 0 3px rgba(108,93,211,.25); }
+.module-keyword .neo-input, .module-negative .neo-input{ margin:6px 0 4px; }
+.module-keyword small{ color:#9c7415; font-size:.76rem; }
+.module-negative small{ color:#C22448; font-size:.76rem; }
+.field-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:14px; margin-bottom:6px; }
+.field{ min-width:0; }
+hr.split{ border:none; border-top:1px dashed var(--shadow-d); margin:20px 0; }
+.check-row-flex{ display:flex; align-items:center; gap:22px; flex-wrap:wrap; padding-top:4px; }
+.plain-check{ display:flex; align-items:center; gap:8px; font-size:.86rem; color:var(--ink-soft); cursor:pointer; }
+.plain-check input[type=checkbox]{
+  appearance:none; width:20px; height:20px; border-radius:6px; background:var(--bg-elevated);
+  box-shadow: inset 2px 2px 5px var(--shadow-d), inset -2px -2px 5px var(--shadow-l); cursor:pointer; position:relative; flex:0 0 auto;
+}
+.plain-check input[type=checkbox]:checked{ background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow:none; }
+.plain-check input[type=checkbox]:checked::after{ content:"✓"; position:absolute; inset:0; color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.chip-group-wrap{ margin-top:10px; }
+.chip-group{ display:flex; flex-wrap:wrap; gap:8px; max-height:150px; overflow-y:auto; padding:4px 2px; }
+.chip-check{ position:relative; }
+.chip-check input[type=checkbox]{ position:absolute; opacity:0; inset:0; cursor:pointer; margin:0; }
+.chip-check span{
+  display:inline-block; padding:8px 15px; font-size:.8rem; font-weight:600; color:var(--ink-soft);
+  background:var(--bg-elevated); border-radius:var(--radius-pill);
+  box-shadow: 3px 3px 7px var(--shadow-d), -3px -3px 7px var(--shadow-l); transition: all .18s ease; user-select:none;
+}
+.chip-check input:checked ~ span{ color:#fff; background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow: inset 2px 2px 5px rgba(0,0,0,.15); }
+.chip-check input:focus-visible ~ span{ outline:2px solid var(--violet); outline-offset:2px; }
+.models-section{ margin-top:10px; }
+.models-group{
+  max-height:250px; overflow-y:auto; border-radius:var(--radius-md); padding:14px; background:var(--bg-sunken);
+  box-shadow: inset 3px 3px 8px var(--shadow-d), inset -3px -3px 8px var(--shadow-l);
+}
+.brand-title{ font-weight:700; font-size:.85rem; color:var(--violet-deep); margin:10px 0 6px; padding-bottom:4px; border-bottom:1px solid rgba(108,93,211,.18); }
+.brand-title:first-child{ margin-top:0; }
+.model-row{ display:grid; grid-template-columns:repeat(auto-fill, minmax(130px,1fr)); gap:6px 10px; margin-bottom:6px; }
+.model-check label{ display:flex; align-items:center; gap:6px; font-size:.78rem; font-weight:500; color:var(--ink); margin:0; cursor:pointer; }
+.model-check input[type=checkbox]{
+  appearance:none; width:15px; height:15px; border-radius:4px; background:var(--bg-elevated);
+  box-shadow: inset 2px 2px 4px var(--shadow-d), inset -2px -2px 4px var(--shadow-l); position:relative; flex:0 0 auto; cursor:pointer;
+}
+.model-check input[type=checkbox]:checked{ background:var(--violet); box-shadow:none; }
+.model-check input[type=checkbox]:checked::after{ content:"✓"; position:absolute; inset:0; color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; }
+.actions{ display:flex; justify-content:center; gap:14px; flex-wrap:wrap; margin-top:24px; }
+.btn-neo{ border:none; cursor:pointer; font-weight:700; font-size:1rem; padding:15px 34px; border-radius:var(--radius-md); transition: transform .15s ease, box-shadow .15s ease; }
+.btn-neo:active{ transform:translateY(2px); }
+.btn-primary-neo{ color:#fff; background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow: 6px 6px 16px var(--shadow-d), -4px -4px 12px var(--shadow-l); }
+.btn-primary-neo:hover{ box-shadow: 8px 8px 20px var(--shadow-d), -6px -6px 16px var(--shadow-l); }
+.btn-primary-neo:disabled{ opacity:.6; cursor:not-allowed; }
+.btn-secondary-neo{ color:var(--teal); background:var(--bg-elevated); box-shadow: 6px 6px 16px var(--shadow-d), -4px -4px 12px var(--shadow-l); }
+.btn-ghost-neo{
+  border:none; cursor:pointer; font-weight:600; font-size:.82rem; padding:9px 16px; border-radius:var(--radius-pill);
+  color:var(--ink-soft); background:var(--bg-elevated); box-shadow: 3px 3px 8px var(--shadow-d), -3px -3px 8px var(--shadow-l); transition: all .15s ease;
+}
+.btn-ghost-neo:hover{ color:var(--violet-deep); }
+.btn-ghost-neo:active{ transform:translateY(1px); }
+.normal-filters.disabled-section{ opacity:.4; pointer-events:none; filter:grayscale(.3); }
+.result-count{ text-align:center; font-weight:700; color:var(--ink-soft); margin:6px 0 18px; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
+.result-count strong{ color:var(--ink); font-family:var(--font-mono); }
+.loading-radar{ text-align:center; padding:50px 0; }
+.radar{ position:relative; width:70px; height:70px; margin:0 auto 16px; }
+.radar .ring{ position:absolute; inset:0; border-radius:50%; border:3px solid var(--violet); animation:pulseRing 1.8s ease-out infinite; }
+.radar .r2{ animation-delay:.5s; }
+.radar .r3{ animation-delay:1s; }
+.radar .dot{ position:absolute; inset:0; margin:auto; width:14px; height:14px; border-radius:50%; background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow:0 0 12px rgba(108,93,211,.6); }
+.loading-radar p{ color:var(--ink-soft); font-weight:600; }
+.badge-neo{ display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:700; padding:5px 10px; border-radius:var(--radius-pill); box-shadow: 2px 2px 5px var(--shadow-d), -2px -2px 5px var(--shadow-l); }
+.badge-nardeban{ background:var(--rose-soft); color:#C22448; }
+.badge-shop{ background:var(--blue-soft); color:#2054B8; }
+.badge-smart{ background:var(--violet-soft); color:var(--violet-deep); }
+.badge-avg{ background:var(--teal-soft); color:#0C7E72; }
+.badge-keyword{ background:var(--amber-soft); color:#9C6C0A; }
+.results-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:20px; }
+.card-ad{
+  background:var(--bg-elevated); border-radius:var(--radius-md); overflow:hidden;
+  box-shadow: 8px 8px 18px var(--shadow-d), -8px -8px 18px var(--shadow-l);
+  display:flex; flex-direction:column; transition: box-shadow .25s ease, transform .12s ease-out; opacity:0; animation:fadeUp .5s ease both;
+}
+.card-ad.border-keyword{ box-shadow: 8px 8px 18px var(--shadow-d), -8px -8px 18px var(--shadow-l), 0 0 0 2px var(--amber); }
+.card-ad:hover{ box-shadow: 12px 12px 26px var(--shadow-d), -10px -10px 22px var(--shadow-l); }
+.ad-img-wrap{ position:relative; height:168px; overflow:hidden; }
+.ad-img{ width:100%; height:100%; object-fit:cover; display:block; transition:transform .35s ease; }
+.card-ad:hover .ad-img{ transform:scale(1.06); }
+.ad-badges{ position:absolute; top:8px; inset-inline-start:8px; display:flex; flex-wrap:wrap; gap:4px; max-width:calc(100% - 16px); }
+.ad-body{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:8px; flex:1; }
+.ad-title{ font-size:.9rem; font-weight:700; line-height:1.4; margin:0; min-height:2.5em; }
+.ad-price{ font-family:var(--font-mono); font-weight:700; color:var(--teal); font-size:1.02rem; }
+.ad-status{ font-size:.78rem; color:var(--ink-faint); }
+.ad-keywords{ display:flex; flex-wrap:wrap; gap:4px; }
+.ad-link{
+  margin-top:auto; text-align:center; text-decoration:none; font-weight:700; font-size:.85rem; padding:10px; border-radius:var(--radius-sm);
+  color:var(--violet-deep); background:var(--bg-elevated); box-shadow: inset 3px 3px 7px var(--shadow-d), inset -3px -3px 7px var(--shadow-l); transition: all .15s ease;
+}
+.ad-link:hover{ color:#fff; background:linear-gradient(145deg, var(--violet), var(--violet-deep)); box-shadow:none; }
+.empty-state{ text-align:center; padding:60px 24px; color:var(--ink-soft); background:var(--bg-elevated); border-radius:var(--radius-lg); box-shadow: inset 5px 5px 12px var(--shadow-d), inset -5px -5px 12px var(--shadow-l); }
+.empty-state h5{ margin:0 0 6px; color:var(--ink); }
+.empty-state.error{ color:var(--rose); }
+.monitor-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:18px; }
+.monitor-card{ background:var(--bg-elevated); border-radius:var(--radius-md); padding:18px 20px; box-shadow: 8px 8px 18px var(--shadow-d), -8px -8px 18px var(--shadow-l); border-inline-start:5px solid var(--violet); animation:fadeUp .4s ease both; }
+.monitor-card.inactive{ border-inline-start-color:var(--ink-faint); opacity:.65; }
+.monitor-card .m-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.monitor-card h6{ margin:0; font-size:1rem; font-weight:700; }
+.status-pill{ font-size:.7rem; font-weight:700; padding:4px 12px; border-radius:var(--radius-pill); }
+.status-pill.on{ color:#0C7E72; background:var(--teal-soft); }
+.status-pill.off{ color:var(--ink-soft); background:var(--bg-sunken); }
+.monitor-meta{ color:var(--ink-faint); font-size:.78rem; margin:8px 0 14px; }
+.monitor-actions{ display:flex; gap:8px; }
+.table-panel{ overflow-x:auto; padding:10px; }
+table.history-table{ width:100%; border-collapse:separate; border-spacing:0 8px; min-width:640px; }
+table.history-table thead th{ text-align:start; font-size:.76rem; color:var(--ink-faint); font-weight:700; padding:0 14px 6px; }
+table.history-table tbody tr{ background:var(--bg-elevated); box-shadow: 4px 4px 10px var(--shadow-d), -4px -4px 10px var(--shadow-l); }
+table.history-table tbody td{ padding:12px 14px; font-size:.85rem; vertical-align:middle; }
+table.history-table tbody tr td:first-child{ border-top-right-radius:var(--radius-sm); border-bottom-right-radius:var(--radius-sm); }
+table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-sm); border-bottom-left-radius:var(--radius-sm); }
+.hist-time{ font-family:var(--font-mono); font-size:.76rem; color:var(--ink-faint); white-space:nowrap; }
+.hist-price{ font-family:var(--font-mono); color:var(--teal); font-weight:700; }
+@media (max-width:760px){
+  .app-shell{ padding:18px 12px 50px; }
+  .panel{ padding:18px; border-radius:20px; }
+  .cat-btn{ padding:11px 20px; font-size:.92rem; }
+  .field-grid{ grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); }
+  .actions{ flex-direction:column; }
+  .btn-neo{ width:100%; }
+  .results-grid{ grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:14px; }
+  .ad-img-wrap{ height:130px; }
+  .console-tab{ font-size:.82rem; padding:10px; }
+  .logout-link{ position:static; display:inline-block; margin-top:10px; }
+}
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="hero">
+    <a class="logout-link" href="/logout">خروج</a>
+    <span class="hero-badge">📡 دیده‌بان دیوار</span>
+    <h1>مانیتور دیوار</h1>
+    <p>رصد لحظه‌ای آگهی‌های موبایل و خودرو، هوشمند و بی‌وقفه</p>
+  </div>
+
+  <nav class="console-tabs">
+    <button class="console-tab active" data-page="search">🔍 جستجو</button>
+    <button class="console-tab" data-page="monitors">📡 مانیتورها</button>
+    <button class="console-tab" data-page="history">🕘 تاریخچه</button>
+  </nav>
+
+  <div id="page-search" class="page-section active">
+    <div class="category-switch">
+      <button id="tab-mobile" class="cat-btn active">📱 موبایل</button>
+      <button id="tab-car" class="cat-btn">🚗 خودرو</button>
+    </div>
+
+    <div class="panel filter-panel">
+      <div class="module module-smart">
+        <label class="switch-row" for="smart_search">
+          <span class="switch-label"><strong>جستجوی هوشمند</strong><small>فقط معامله‌های واقعاً مناسب (زیر میانگین + کیفیت قابل قبول)</small></span>
+          <span class="neo-switch"><input type="checkbox" id="smart_search"><span class="knob"></span></span>
+        </label>
+        <div class="days-input" id="smartScoreBox">
+          <label for="min_smart_score" style="margin:0;">حداقل امتیاز:</label>
+          <input type="number" id="min_smart_score" class="neo-input" value="10" min="1" max="50" step="0.5">
+          <span style="font-size:.75rem;color:var(--ink-faint);">پیشنهاد: ۱۰ تا ۱۴</span>
+        </div>
+      </div>
+
+      <div class="module module-avg">
+        <label class="switch-row" for="smart_avg">
+          <span class="switch-label"><strong>میانگین قیمت هوشمند</strong><small>مقایسه هر آگهی با میانگین بازار</small></span>
+          <span class="neo-switch"><input type="checkbox" id="smart_avg"><span class="knob"></span></span>
+        </label>
+        <div class="days-input">
+          <label for="smart_days" style="margin:0;">تعداد روز:</label>
+          <input type="number" id="smart_days" class="neo-input" value="3" min="1" max="30">
+        </div>
+      </div>
+
+      <div class="module module-keyword">
+        <label for="keywords" style="color:#9c7415;">🔑 کلمات کلیدی</label>
+        <input type="text" id="keywords" class="neo-input" placeholder="پلمپ, بدون رنگ, موتور سالم, گارانتی">
+        <small>با ویرگول جدا کنید — آگهی‌های دارای این کلمات اولویت می‌گیرند</small>
+      </div>
+
+      <div class="module module-negative">
+        <label for="negative_keywords" style="color:#C22448;">🚫 کلمات منفی (حذف قطعی)</label>
+        <input type="text" id="negative_keywords" class="neo-input" placeholder="اقساط, تعمیری, شکسته, سالم نیست, تعویض">
+        <small>اگر این کلمات باشد آگهی حذف می‌شود (حتی اگر کلمه کلیدی مثبت داشته باشد)</small>
+      </div>
+
+      <hr class="split">
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="city">شهر</label>
+          <select id="city" class="neo-select">
+            <option value="5" selected>تبریز</option>
+            <option value="1">تهران</option>
+            <option value="3">مشهد</option>
+            <option value="2">کرج</option>
+            <option value="4">اصفهان</option>
+            <option value="6">شیراز</option>
+            <option value="7">اهواز</option>
+            <option value="8">قم</option>
+            <option value="9">کرمانشاه</option>
+            <option value="10">ارومیه</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="recent_ads">زمان آگهی</label>
+          <select id="recent_ads" class="neo-select">
+            <option value="3h">۳ ساعت</option>
+            <option value="1d" selected>۲۴ ساعت</option>
+            <option value="2d">۲ روز</option>
+            <option value="7d">۱ هفته</option>
+          </select>
+        </div>
+        <div class="field" id="businessTypeBox">
+          <label for="business_type">نوع آگهی‌دهنده</label>
+          <select id="business_type" class="neo-select">
+            <option value="ALL" selected>همه</option>
+            <option value="personal">شخصی</option>
+            <option value="marketplace">فروشگاه</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- فیلتر موبایل -->
+      <div class="normal-filters" id="mobileFilters">
+        <hr class="split">
+        <div class="field-grid">
+          <div class="field"><label for="min_price_mobile">حداقل قیمت</label><input type="number" id="min_price_mobile" class="neo-input" value="1000000"></div>
+          <div class="field"><label for="max_price_mobile">حداکثر قیمت</label><input type="number" id="max_price_mobile" class="neo-input" value="900000000"></div>
+          <div class="field">
+            <label for="sort_mobile">مرتب‌سازی</label>
+            <select id="sort_mobile" class="neo-select">
+              <option value="sort_date" selected>جدیدترین</option>
+              <option value="cheapest">ارزان‌ترین</option>
+              <option value="most_expensive">گران‌ترین</option>
+            </select>
+          </div>
+        </div>
+        <div class="check-row-flex">
+          <label class="plain-check"><input type="checkbox" id="has_photo_mobile" checked><span>عکس‌دار</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_installment_mobile"><span>اقساطی</span></label>
+        </div>
+        <div class="chip-group-wrap">
+          <label>وضعیت</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="status-check" type="checkbox" value="new"><span>نو</span></label>
+            <label class="chip-check"><input class="status-check" type="checkbox" value="like-new"><span>در حد نو</span></label>
+            <label class="chip-check"><input class="status-check" type="checkbox" value="used"><span>کارکرده</span></label>
+            <label class="chip-check"><input class="status-check" type="checkbox" value="repair-needed"><span>نیاز به تعمیر</span></label>
+          </div>
+        </div>
+        <div class="chip-group-wrap">
+          <label>تعداد سیم‌کارت</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="sim-check" type="checkbox" value="1"><span>تک سیم</span></label>
+            <label class="chip-check"><input class="sim-check" type="checkbox" value="2"><span>دو سیم</span></label>
+            <label class="chip-check"><input class="sim-check" type="checkbox" value="+3"><span>۳ یا بیشتر</span></label>
+          </div>
+        </div>
+        <div class="chip-group-wrap">
+          <label>رم</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="ram-check" type="checkbox" value="4GB"><span>4GB</span></label>
+            <label class="chip-check"><input class="ram-check" type="checkbox" value="6GB"><span>6GB</span></label>
+            <label class="chip-check"><input class="ram-check" type="checkbox" value="8GB"><span>8GB</span></label>
+            <label class="chip-check"><input class="ram-check" type="checkbox" value="12GB"><span>12GB</span></label>
+            <label class="chip-check"><input class="ram-check" type="checkbox" value="16GB"><span>16GB</span></label>
+            <label class="chip-check"><input class="ram-check" type="checkbox" value="18GB"><span>18GB</span></label>
+          </div>
+        </div>
+        <div class="chip-group-wrap">
+          <label>حافظه داخلی</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="storage-check" type="checkbox" value="64GB"><span>64GB</span></label>
+            <label class="chip-check"><input class="storage-check" type="checkbox" value="128GB"><span>128GB</span></label>
+            <label class="chip-check"><input class="storage-check" type="checkbox" value="256GB"><span>256GB</span></label>
+            <label class="chip-check"><input class="storage-check" type="checkbox" value="512GB"><span>512GB</span></label>
+            <label class="chip-check"><input class="storage-check" type="checkbox" value="1TB"><span>1TB</span></label>
+          </div>
+        </div>
+        <div class="chip-group-wrap">
+          <label>رنگ</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="مشکی"><span>مشکی</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="سفید"><span>سفید</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="آبی"><span>آبی</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="طلایی"><span>طلایی</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="نقره‌ای"><span>نقره‌ای</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="خاکستری"><span>خاکستری</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="صورتی"><span>صورتی</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="سبز"><span>سبز</span></label>
+            <label class="chip-check"><input class="color-check-mobile" type="checkbox" value="سایر"><span>سایر</span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- فیلتر خودرو -->
+      <div class="normal-filters" id="carFilters" style="display:none;">
+        <hr class="split">
+        <div class="field-grid">
+          <div class="field"><label for="min_price_car">حداقل قیمت</label><input type="number" id="min_price_car" class="neo-input" value="100000000"></div>
+          <div class="field"><label for="max_price_car">حداکثر قیمت</label><input type="number" id="max_price_car" class="neo-input" value="5000000000"></div>
+          <div class="field"><label for="year_min">سال از</label><input type="number" id="year_min" class="neo-input" value="1390"></div>
+          <div class="field"><label for="year_max">سال تا</label><input type="number" id="year_max" class="neo-input" value="1404"></div>
+          <div class="field"><label for="usage_min">کارکرد از</label><input type="number" id="usage_min" class="neo-input" value="0"></div>
+          <div class="field"><label for="usage_max">کارکرد تا</label><input type="number" id="usage_max" class="neo-input" value="300000"></div>
+          <div class="field">
+            <label for="sort_car">مرتب‌سازی</label>
+            <select id="sort_car" class="neo-select">
+              <option value="sort_date" selected>جدیدترین</option>
+              <option value="cheapest">ارزان‌ترین</option>
+              <option value="most_expensive">گران‌ترین</option>
+            </select>
+          </div>
+        </div>
+        <div class="check-row-flex">
+          <label class="plain-check"><input type="checkbox" id="has_photo_car" checked><span>عکس‌دار</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_video_car"><span>ویدیو</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_installment_car"><span>اقساطی</span></label>
+        </div>
+        <div class="chip-group-wrap">
+          <label>وضعیت بدنه</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="body-check" type="checkbox" value="intact"><span>سالم</span></label>
+            <label class="chip-check"><input class="body-check" type="checkbox" value="some-scratches"><span>خط و خش</span></label>
+            <label class="chip-check"><input class="body-check" type="checkbox" value="one-spot-paint"><span>یک لکه رنگ</span></label>
+            <label class="chip-check"><input class="body-check" type="checkbox" value="some-paint"><span>چند لکه رنگ</span></label>
+            <label class="chip-check"><input class="body-check" type="checkbox" value="full-paint"><span>تمام‌رنگ</span></label>
+            <label class="chip-check"><input class="body-check" type="checkbox" value="accidental"><span>تصادفی</span></label>
+          </div>
+        </div>
+        <div class="chip-group-wrap">
+          <label>وضعیت شاسی</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="chassis-check" type="checkbox" value="both-healthy"><span>هر دو سالم</span></label>
+            <label class="chip-check"><input class="chassis-check" type="checkbox" value="front-damage"><span>جلو ضربه</span></label>
+            <label class="chip-check"><input class="chassis-check" type="checkbox" value="back-damage"><span>عقب ضربه</span></label>
+            <label class="chip-check"><input class="chassis-check" type="checkbox" value="both-damage"><span>هر دو ضربه</span></label>
+          </div>
+        </div>
+        <div class="chip-group-wrap">
+          <label>موتور / گیربکس</label>
+          <div class="chip-group">
+            <label class="chip-check"><input class="motor-check" type="checkbox" value="healthy"><span>موتور سالم</span></label>
+            <label class="chip-check"><input class="motor-check" type="checkbox" value="needs-repair"><span>نیاز به تعمیر</span></label>
+            <label class="chip-check"><input class="gearbox-check" type="checkbox" value="manual"><span>دستی</span></label>
+            <label class="chip-check"><input class="gearbox-check" type="checkbox" value="automatic"><span>اتومات</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="models-section">
+        <label>مدل‌ها</label>
+        <div class="models-group" id="mobileModelsBox">
+          {% for brand, model_list in mobile_models.items() %}
+          <div class="brand-title">{{ brand|upper }}</div>
+          <div class="model-row">
+            {% for model in model_list %}
+            <div class="model-check">
+              <label><input type="checkbox" class="model-check-mobile" value="{{ model }}"><span>{{ model }}</span></label>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="models-group" id="carModelsBox" style="display:none;">
+          {% for brand, model_list in car_models.items() %}
+          <div class="brand-title">{{ brand|upper }}</div>
+          <div class="model-row">
+            {% for model in model_list %}
+            <div class="model-check">
+              <label><input type="checkbox" class="model-check-car" value="{{ model }}"><span>{{ model }}</span></label>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="searchBtn" class="btn-neo btn-primary-neo">جستجو کن</button>
+        <button id="saveMonitorBtn" class="btn-neo btn-secondary-neo">ذخیره به‌عنوان مانیتور</button>
+      </div>
+    </div>
+
+    <div id="resultCount" class="result-count" style="display:none;"></div>
+    <div id="loading" class="loading-radar" style="display:none;">
+      <div class="radar"><div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div><div class="dot"></div></div>
+      <p>در حال جستجو...</p>
+    </div>
+    <div id="results" class="results-grid"></div>
+  </div>
+
+  <div id="page-monitors" class="page-section">
+    <div class="section-head">
+      <h2>مانیتورهای فعال</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-ghost-neo" id="testEmailBtn">تست ایمیل</button>
+        <button class="btn-ghost-neo" id="testTelegramBtn">تست تلگرام</button>
+      </div>
+    </div>
+    <div id="monitorsList" class="monitor-grid"></div>
+    <div id="monitorsEmpty" class="empty-state" style="display:none;">
+      <h5>هنوز مانیتوری نساختی</h5>
+      از صفحه جستجو، فیلترها را تنظیم کن و «ذخیره به‌عنوان مانیتور» را بزن.
+    </div>
+  </div>
+
+  <div id="page-history" class="page-section">
+    <div class="section-head">
+      <h2>تاریخچه آگهی‌های پیدا‌شده</h2>
+      <button class="btn-ghost-neo" id="refreshHistoryBtn">بروزرسانی</button>
+    </div>
+    <div class="panel table-panel">
+      <table class="history-table">
+        <thead>
+          <tr><th>زمان</th><th>مانیتور</th><th>عنوان</th><th>قیمت</th><th>کلمات</th><th></th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <div id="historyEmpty" class="empty-state" style="display:none;">هنوز موردی ثبت نشده</div>
+  </div>
+</div>
+
+<script>
+let currentCategory = "mobile";
+
+document.querySelectorAll('[data-page]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-page]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    if (btn.dataset.page === 'monitors') loadMonitors();
+    if (btn.dataset.page === 'history') loadHistory();
+  });
+});
+
+document.getElementById('tab-mobile').addEventListener('click', () => {
+  currentCategory = 'mobile';
+  document.getElementById('tab-mobile').classList.add('active');
+  document.getElementById('tab-car').classList.remove('active');
+  document.getElementById('mobileFilters').style.display = 'block';
+  document.getElementById('carFilters').style.display = 'none';
+  document.getElementById('mobileModelsBox').style.display = 'block';
+  document.getElementById('carModelsBox').style.display = 'none';
+  document.getElementById('businessTypeBox').style.display = 'block';
+});
+document.getElementById('tab-car').addEventListener('click', () => {
+  currentCategory = 'car';
+  document.getElementById('tab-car').classList.add('active');
+  document.getElementById('tab-mobile').classList.remove('active');
+  document.getElementById('mobileFilters').style.display = 'none';
+  document.getElementById('carFilters').style.display = 'block';
+  document.getElementById('mobileModelsBox').style.display = 'none';
+  document.getElementById('carModelsBox').style.display = 'block';
+  document.getElementById('businessTypeBox').style.display = 'none';
+});
+
+const smartSearch = document.getElementById('smart_search');
+const smartAvg = document.getElementById('smart_avg');
+const normalFilters = document.querySelectorAll('.normal-filters');
+smartSearch.addEventListener('change', function () {
+  if (this.checked) { smartAvg.checked = false; normalFilters.forEach(e => e.classList.add('disabled-section')); }
+  else normalFilters.forEach(e => e.classList.remove('disabled-section'));
+});
+smartAvg.addEventListener('change', function () {
+  if (this.checked) { smartSearch.checked = false; normalFilters.forEach(e => e.classList.remove('disabled-section')); }
+});
+
+function getChecked(sel) {
+  return Array.from(document.querySelectorAll(sel + ':checked')).map(c => c.value);
+}
+
+function buildSettings() {
+  const isMobile = currentCategory === 'mobile';
+  const settings = {
+    category: currentCategory,
+    city: document.getElementById('city').value,
+    recent_ads: document.getElementById('recent_ads').value,
+    models: isMobile ? getChecked('.model-check-mobile') : getChecked('.model-check-car'),
+    smart_search: smartSearch.checked,
+    smart_avg: smartAvg.checked,
+    smart_days: document.getElementById('smart_days').value,
+    min_smart_score: document.getElementById('min_smart_score').value,
+    keywords: document.getElementById('keywords').value,
+    negative_keywords: document.getElementById('negative_keywords').value,
+    business_type: document.getElementById('business_type').value,
+    sort: isMobile ? document.getElementById('sort_mobile').value : document.getElementById('sort_car').value,
+    has_photo: isMobile ? document.getElementById('has_photo_mobile').checked : document.getElementById('has_photo_car').checked,
+    has_installment: isMobile ? document.getElementById('has_installment_mobile').checked : document.getElementById('has_installment_car').checked,
+    min_price: isMobile ? document.getElementById('min_price_mobile').value : document.getElementById('min_price_car').value,
+    max_price: isMobile ? document.getElementById('max_price_mobile').value : document.getElementById('max_price_car').value
+  };
+  if (isMobile) {
+    settings.status = getChecked('.status-check');
+    settings.sim_card_slot = getChecked('.sim-check');
+    settings.ram_memory = getChecked('.ram-check');
+    settings.internal_storage = getChecked('.storage-check');
+    settings.base_color = getChecked('.color-check-mobile');
+  } else {
+    settings.has_video = document.getElementById('has_video_car').checked;
+    settings.year_min = document.getElementById('year_min').value;
+    settings.year_max = document.getElementById('year_max').value;
+    settings.usage_min = document.getElementById('usage_min').value;
+    settings.usage_max = document.getElementById('usage_max').value;
+    settings.body_status = getChecked('.body-check');
+    settings.chassis_status = getChecked('.chassis-check');
+    settings.motor_status = getChecked('.motor-check');
+    settings.gearbox = getChecked('.gearbox-check');
+  }
+  return settings;
+}
+
+document.getElementById('searchBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('searchBtn');
+  const loading = document.getElementById('loading');
+  const results = document.getElementById('results');
+  const resultCount = document.getElementById('resultCount');
+  btn.disabled = true;
+  loading.style.display = 'block';
+  results.innerHTML = '';
+  resultCount.style.display = 'none';
+  try {
+    const res = await fetch('/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildSettings())
+    });
+    if (res.status === 401) { window.location.href = '/login'; return; }
+    const data = await res.json();
+    if (data.success && data.ads && data.ads.length) {
+      resultCount.style.display = 'flex';
+      let t = `تعداد: <strong>${data.count}</strong>`;
+      if (data.smart_search_enabled) t += ' <span class="badge-neo badge-smart">✨ هوشمند</span>';
+      if (data.smart_avg_enabled) t += ' <span class="badge-neo badge-avg">📊 میانگین</span>';
+      resultCount.innerHTML = t;
+      data.ads.forEach((ad, i) => {
+        const badges = [];
+        if (ad.is_nardeban) badges.push('<span class="badge-neo badge-nardeban">🚀 نردبان</span>');
+        if (ad.is_shop) badges.push('<span class="badge-neo badge-shop">🏪 فروشگاه</span>');
+        if (ad.value_score) badges.push(`<span class="badge-neo badge-smart">⭐ ${ad.value_score}</span>`);
+        const keywordBadges = (ad.has_keyword && ad.matched_keywords)
+          ? ad.matched_keywords.map(k => `<span class="badge-neo badge-keyword">🔑 ${k}</span>`).join('')
+          : '';
+        const cls = ad.has_keyword ? 'card-ad border-keyword' : 'card-ad';
+        const card = document.createElement('div');
+        card.className = cls;
+        card.style.animationDelay = (Math.min(i, 24) * 0.04) + 's';
+        card.innerHTML = `
+          <div class="ad-img-wrap">
+            <img src="${ad.image_url || 'https://via.placeholder.com/300x170?text=No+Image'}" class="ad-img" loading="lazy">
+            <div class="ad-badges">${badges.join('')}</div>
+          </div>
+          <div class="ad-body">
+            <p class="ad-title">${ad.title || ''}</p>
+            <div class="ad-price">${ad.price || 'توافقی'}</div>
+            <div class="ad-status">${ad.status || ''}</div>
+            ${keywordBadges ? `<div class="ad-keywords">${keywordBadges}</div>` : ''}
+            <a href="${ad.link}" target="_blank" class="ad-link">مشاهده آگهی</a>
+          </div>`;
+        results.appendChild(card);
+      });
+    } else {
+      results.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><h5>آگهی‌ای پیدا نشد</h5>حداقل امتیاز را کم کن یا کلمات منفی را کمتر کن.</div>';
+    }
+  } catch (e) {
+    console.error(e);
+    results.innerHTML = '<div class="empty-state error" style="grid-column:1/-1;"><h5>خطا در ارتباط</h5>اتصال را بررسی و دوباره تلاش کن.</div>';
+  }
+  loading.style.display = 'none';
+  btn.disabled = false;
+});
+
+document.getElementById('saveMonitorBtn').addEventListener('click', async () => {
+  const name = prompt('نام این مانیتور را وارد کن:', currentCategory === 'mobile' ? 'مانیتور موبایل' : 'مانیتور خودرو');
+  if (!name) return;
+  const trackPrice = confirm('رصد تغییر قیمت هم فعال شود؟\n(روزانه قیمت آگهی‌های قبلی چک می‌شود)');
+  const res = await fetch('/api/monitors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      category: currentCategory,
+      settings: buildSettings(),
+      track_price: trackPrice
+    })
+  });
+  if (res.status === 401) { window.location.href = '/login'; return; }
+  const data = await res.json();
+  alert(data.success ? 'مانیتور ذخیره شد.' : 'خطا در ذخیره');
+});
+
+async function loadMonitors() {
+  const res = await fetch('/api/monitors');
+  if (res.status === 401) { window.location.href = '/login'; return; }
+  const list = await res.json();
+  const box = document.getElementById('monitorsList');
+  const empty = document.getElementById('monitorsEmpty');
+  box.innerHTML = '';
+  if (!list.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.forEach((m, i) => {
+    const active = m.is_active == 1;
+    const track = m.track_price == 1 ? ' · 💰 رصد قیمت' : '';
+    const card = document.createElement('div');
+    card.className = 'monitor-card' + (active ? '' : ' inactive');
+    card.style.animationDelay = (i * 0.05) + 's';
+    card.innerHTML = `
+      <div class="m-head">
+        <h6>${m.name}</h6>
+        <span class="status-pill ${active ? 'on' : 'off'}">${active ? 'فعال' : 'غیرفعال'}</span>
+      </div>
+      <div class="monitor-meta">${m.category === 'mobile' ? '📱 موبایل' : '🚗 خودرو'}${track} · ${m.created_at || ''}</div>
+      <div class="monitor-actions">
+        <button class="btn-ghost-neo" onclick="toggleMonitor(${m.id})">${active ? 'غیرفعال' : 'فعال'} کن</button>
+        <button class="btn-ghost-neo" onclick="deleteMonitor(${m.id})" style="color:#C22448;">حذف</button>
+      </div>`;
+    box.appendChild(card);
+  });
+}
+async function toggleMonitor(id) { await fetch('/api/monitors/' + id + '/toggle', { method: 'POST' }); loadMonitors(); }
+async function deleteMonitor(id) { if (!confirm('حذف شود؟')) return; await fetch('/api/monitors/' + id, { method: 'DELETE' }); loadMonitors(); }
+
+document.getElementById('testTelegramBtn').addEventListener('click', async () => {
+  await fetch('/api/test-telegram', { method: 'POST' });
+  alert('پیام تست تلگرام ارسال شد.');
+});
+document.getElementById('testEmailBtn').addEventListener('click', async () => {
+  await fetch('/api/test-email', { method: 'POST' });
+  alert('پیام تست ایمیل ارسال شد. اینباکس را چک کن.');
+});
+
+async function loadHistory() {
+  const res = await fetch('/api/history?limit=150');
+  if (res.status === 401) { window.location.href = '/login'; return; }
+  const list = await res.json();
+  const body = document.getElementById('historyBody');
+  const empty = document.getElementById('historyEmpty');
+  body.innerHTML = '';
+  if (!list.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.forEach(h => {
+    body.innerHTML += `
+      <tr>
+        <td class="hist-time">${(h.found_at || '').replace('T', ' ').slice(0, 16)}</td>
+        <td>${h.monitor_name || '-'}</td>
+        <td>${h.title || ''}</td>
+        <td class="hist-price">${h.price || ''}</td>
+        <td>${h.matched_keywords || ''}</td>
+        <td><a href="${h.link}" target="_blank" class="btn-ghost-neo" style="text-decoration:none;">مشاهده</a></td>
+      </tr>`;
+  });
+}
+document.getElementById('refreshHistoryBtn').addEventListener('click', loadHistory);
+</script>
+</body>
+</html>
