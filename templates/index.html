@@ -316,6 +316,12 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
       </div>
 
       <div class="module module-keyword">
+        <label for="query" style="color:#5347B0;">🔍 جستجوی آزاد</label>
+        <input type="text" id="query" class="neo-input" placeholder="مثلاً پراید 132، آیفون ۱۳، گلکسی S24">
+        <small>مثل جستجوی معمولی دیوار عمل می‌کند؛ اگر مدل خاصی انتخاب نکنی، نتایج کلی همین متن برمی‌گردد.</small>
+      </div>
+
+      <div class="module module-keyword">
         <label for="keywords" style="color:#9c7415;">🔑 کلمات کلیدی</label>
         <input type="text" id="keywords" class="neo-input" placeholder="پلمپ, بدون رنگ, موتور سالم, گارانتی">
         <small>با ویرگول جدا کنید — آگهی‌های دارای این کلمات اولویت می‌گیرند</small>
@@ -621,6 +627,7 @@ function buildSettings() {
   const isMobile = currentCategory === 'mobile';
   const settings = {
     category: currentCategory,
+    query: document.getElementById('query').value,
     city: document.getElementById('city').value,
     recent_ads: document.getElementById('recent_ads').value,
     models: isMobile ? getChecked('.model-check-mobile') : getChecked('.model-check-car'),
