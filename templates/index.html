@@ -66,11 +66,16 @@ button, input, select{ font-family:inherit; }
 }
 .hero h1{ font-size:clamp(1.9rem, 4.5vw, 2.9rem); font-weight:800; margin:0 0 8px; letter-spacing:-.01em; }
 .hero p{ color:var(--ink-soft); font-size:1rem; margin:0; }
+.hero-actions{
+  position:absolute; top:8px; inset-inline-end:0; z-index:5;
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;
+  max-width:calc(100% - 32px);
+}
 .logout-link{
-  position:absolute; top:8px; inset-inline-end:0;
   text-decoration:none; font-size:.8rem; font-weight:600; color:var(--ink-soft);
   padding:8px 14px; border-radius:var(--radius-pill); background:var(--bg-elevated);
   box-shadow: 3px 3px 8px var(--shadow-d), -3px -3px 8px var(--shadow-l);
+  white-space:nowrap; transition: color .2s ease;
 }
 .logout-link:hover{ color:var(--rose); }
 .console-tabs{
@@ -240,17 +245,35 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
   .results-grid{ grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:14px; }
   .ad-img-wrap{ height:130px; }
   .console-tab{ font-size:.82rem; padding:10px; }
-  .logout-link{ position:static; display:inline-block; margin-top:10px; }
+  .hero-actions{position:static; justify-content:center; max-width:100%;margin:0 0 18px; width:100%;}
 }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
+@media (max-width:400px){
+  .hero h1{ font-size:1.6rem; }
+  .console-tab{ min-width:90px; font-size:.75rem; padding:9px 6px; }
+  .model-row{ grid-template-columns:repeat(auto-fill, minmax(105px,1fr)); }
+}
+@supports (padding: max(0px)){
+  .app-shell{ padding-left: max(12px, env(safe-area-inset-left));
+              padding-right: max(12px, env(safe-area-inset-right)); }
 }
 </style>
 </head>
 <body>
 <div class="app-shell">
   <div class="hero">
-    <a class="logout-link" href="/logout">خروج</a>
+  <div class="hero-actions">
+  {% if user.role == 'admin' %}<a class="logout-link" href="/admin">🛠 پنل مدیریت</a>{% endif %}
+  <a class="logout-link" href="/account">👤 حساب کاربری{% if not sub_active %} ⚠️{% endif %}</a>
+  <a class="logout-link" href="/logout">🚪 خروج</a>
+</div>
+{% if not sub_active %}
+<div style="max-width:520px;margin:14px auto 0;background:#FCE7EC;color:#C22448;padding:12px 18px;border-radius:14px;font-size:.85rem;font-weight:700;">
+  اشتراک شما فعال نیست یا منقضی شده. جستجو غیرفعال است — از صفحه «حساب کاربری» وضعیت را بررسی کن یا با پشتیبانی تماس بگیر.
+</div>
+{% endif %}
     <span class="hero-badge">📡 دیده‌بان دیوار</span>
     <h1>مانیتور دیوار</h1>
     <p>رصد لحظه‌ای آگهی‌های موبایل و خودرو، هوشمند و بی‌وقفه</p>
@@ -650,6 +673,14 @@ document.getElementById('searchBtn').addEventListener('click', async () => {
     });
     if (res.status === 401) { window.location.href = '/login'; return; }
     const data = await res.json();
+    if (res.status === 402) {
+      results.innerHTML = '<div class="empty-state error" style="grid-column:1/-1;"><h5>اشتراک غیرفعال</h5>' + (data.message || 'برای جستجو باید اشتراک فعال داشته باشی') + '</div>';
+      loading.style.display = 'none'; btn.disabled = false; return;
+    }
+    if (res.status === 429) {
+      results.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><h5>کمی صبر کن</h5>' + (data.message || '') + '</div>';
+      loading.style.display = 'none'; btn.disabled = false; return;
+    }
     if (data.success && data.ads && data.ads.length) {
       resultCount.style.display = 'flex';
       let t = `تعداد: <strong>${data.count}</strong>`;

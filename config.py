@@ -13,3 +13,11 @@ SMTP_USE_SSL = False
 DATABASE_PATH = "/home/qwamjoow/testt.reservira.ir/divar.db"
 MAX_NOTIFY_PER_RUN = 12
 REQUEST_DELAY = 1.0
+
+# ---- New settings ----
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "12345678"
+
+TRIAL_DAYS = 3                     # trial length for new signups
+SEARCH_COOLDOWN_SECONDS = 4        # per-user cooldown between /search calls
+MAX_PARALLEL_DIVAR_REQUESTS = 5    # concurrency cap for Divar API calls

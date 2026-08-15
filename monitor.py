@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-هر ۱۰ دقیقه با Cron اجرا شود:
+اجرا شود Cron هر ۱۰ دقیقه با:
 
 source /home/qwamjoow/virtualenv/testt.reservira.ir/3.12/bin/activate && \
 cd /home/qwamjoow/testt.reservira.ir && \
@@ -35,7 +35,6 @@ def set_meta(conn, key, value):
 
 
 def should_check_prices_today(conn) -> bool:
-    """روزانه فقط یک‌بار چک قیمت انجام شود"""
     last = get_meta(conn, "last_price_check")
     if not last:
         return True
@@ -46,8 +45,33 @@ def should_check_prices_today(conn) -> bool:
         return True
 
 
+def owner_is_eligible(conn, user_id) -> bool:
+    """چک می‌کند صاحب مانیتور فعال و مشترک است"""
+    if not user_id:
+        return True  # legacy monitors without owner - allow (assigned to admin already by init_db)
+    user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user or not user["is_active"]:
+        return False
+    if user["role"] == "admin":
+        return True
+    if not user["subscription_expires_at"]:
+        return False
+    try:
+        return datetime.fromisoformat(user["subscription_expires_at"]) >= datetime.now()
+    except Exception:
+        return False
+
+
+def get_owner_notify_targets(conn, user_id):
+    if not user_id:
+        return None, None
+    user = conn.execute("SELECT telegram_chat_id, notify_email FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        return None, None
+    return user["telegram_chat_id"], user["notify_email"]
+
+
 def extract_price_from_post(token: str):
-    """تلاش برای گرفتن قیمت فعلی یک آگهی از API پست"""
     for url in [
         f"https://api.divar.ir/v8/posts/{token}",
         f"https://api.divar.ir/v8/posts-v2/web/{token}",
@@ -62,7 +86,6 @@ def extract_price_from_post(token: str):
                 if depth > 6:
                     return None
                 if isinstance(obj, dict):
-                    # قیمت متنی رایج
                     for k, v in obj.items():
                         if isinstance(v, str) and ("تومان" in v or "٬" in v or "," in v):
                             if any(ch.isdigit() for ch in v) and len(v) < 40:
@@ -86,8 +109,7 @@ def extract_price_from_post(token: str):
     return None, None
 
 
-def check_price_changes(conn, mon, max_check: int = 40):
-    """قیمت آگهی‌های قبلی این مانیتور را چک می‌کند"""
+def check_price_changes(conn, mon, tg_chat_id, notify_email, max_check: int = 40):
     rows = conn.execute(
         """
         SELECT token, title, price, price_num, link
@@ -104,13 +126,12 @@ def check_price_changes(conn, mon, max_check: int = 40):
         token = row["token"]
         try:
             new_price_str, new_price_num = extract_price_from_post(token)
-            time.sleep(0.55)
+            time.sleep(0.4)
             if not new_price_str or not new_price_num:
                 continue
 
             old_num = row["price_num"]
             if old_num is None:
-                # اولین بار فقط ثبت کن
                 conn.execute(
                     "UPDATE seen_ads SET price=?, price_num=?, last_checked=? WHERE token=?",
                     (new_price_str, new_price_num, datetime.now().isoformat(), token),
@@ -125,38 +146,21 @@ def check_price_changes(conn, mon, max_check: int = 40):
                     (token, monitor_id, title, old_price, new_price, link, changed_at)
                     VALUES (?,?,?,?,?,?,?)
                     """,
-                    (
-                        token,
-                        mon["id"],
-                        row["title"],
-                        row["price"],
-                        new_price_str,
-                        row["link"],
-                        now,
-                    ),
+                    (token, mon["id"], row["title"], row["price"], new_price_str, row["link"], now),
                 )
                 conn.execute(
                     "UPDATE seen_ads SET price=?, price_num=?, last_checked=? WHERE token=?",
                     (new_price_str, new_price_num, now, token),
                 )
-                changed.append(
-                    {
-                        "title": row["title"],
-                        "old": row["price"],
-                        "new": new_price_str,
-                        "link": row["link"],
-                    }
-                )
+                changed.append({"title": row["title"], "old": row["price"], "new": new_price_str, "link": row["link"]})
         except Exception as e:
             print(f"price check item error {token}:", e)
 
     if changed:
         lines = [f"تغییر قیمت - {mon['name']}\n"]
         for c in changed[:MAX_NOTIFY_PER_RUN]:
-            lines.append(
-                f"• {c['title']}\n  قدیم: {c['old']}\n  جدید: {c['new']}\n  {c['link']}\n"
-            )
-        notify("\n".join(lines), subject=f"تغییر قیمت: {mon['name']}")
+            lines.append(f"• {c['title']}\nقدیم: {c['old']}\nجدید: {c['new']}\n{c['link']}\n")
+        notify("\n".join(lines), subject=f"تغییر قیمت: {mon['name']}", telegram_chat_id=tg_chat_id, email=notify_email)
 
     return len(changed)
 
@@ -169,6 +173,12 @@ def run():
 
     for mon in monitors:
         try:
+            if not owner_is_eligible(conn, mon["user_id"]):
+                print(f"Monitor {mon['id']} skipped: owner not eligible (inactive/expired)")
+                continue
+
+            tg_chat_id, notify_email = get_owner_notify_targets(conn, mon["user_id"])
+
             settings = json.loads(mon["settings_json"])
             settings["category"] = mon["category"]
             result = run_search_logic(settings)
@@ -179,10 +189,7 @@ def run():
                 token = ad.get("token")
                 if not token:
                     continue
-
-                exists = conn.execute(
-                    "SELECT 1 FROM seen_ads WHERE token=?", (token,)
-                ).fetchone()
+                exists = conn.execute("SELECT 1 FROM seen_ads WHERE token=?", (token,)).fetchone()
                 if exists:
                     continue
 
@@ -197,16 +204,7 @@ def run():
                     (token, monitor_id, title, price, price_num, link, found_at, last_checked)
                     VALUES (?,?,?,?,?,?,?,?)
                     """,
-                    (
-                        token,
-                        mon["id"],
-                        ad.get("title"),
-                        ad.get("price"),
-                        price_num,
-                        ad.get("link"),
-                        now,
-                        now,
-                    ),
+                    (token, mon["id"], ad.get("title"), ad.get("price"), price_num, ad.get("link"), now, now),
                 )
                 conn.execute(
                     """
@@ -214,16 +212,8 @@ def run():
                     (monitor_id, monitor_name, token, title, price, link, matched_keywords, found_at)
                     VALUES (?,?,?,?,?,?,?,?)
                     """,
-                    (
-                        mon["id"],
-                        mon["name"],
-                        token,
-                        ad.get("title"),
-                        ad.get("price"),
-                        ad.get("link"),
-                        ",".join(ad.get("matched_keywords") or []),
-                        now,
-                    ),
+                    (mon["id"], mon["name"], token, ad.get("title"), ad.get("price"), ad.get("link"),
+                     ",".join(ad.get("matched_keywords") or []), now),
                 )
                 new_ads.append(ad)
 
@@ -234,12 +224,9 @@ def run():
                 for ad in new_ads[:MAX_NOTIFY_PER_RUN]:
                     score = ad.get("value_score")
                     score_txt = f" | امتیاز {score}" if score else ""
-                    lines.append(
-                        f"• {ad.get('title')}{score_txt}\n  {ad.get('price')}\n  {ad.get('link')}\n"
-                    )
-                notify("\n".join(lines), subject=f"دیوار: {mon['name']}")
+                    lines.append(f"• {ad.get('title')}{score_txt}\n{ad.get('price')}\n{ad.get('link')}\n")
+                notify("\n".join(lines), subject=f"دیوار: {mon['name']}", telegram_chat_id=tg_chat_id, email=notify_email)
 
-            # رصد تغییر قیمت (روزانه)
             track_price = 0
             try:
                 track_price = int(mon["track_price"] or 0)
@@ -248,11 +235,11 @@ def run():
 
             if track_price and do_price_check:
                 print(f"Checking price changes for monitor {mon['id']} ...")
-                n = check_price_changes(conn, mon)
+                n = check_price_changes(conn, mon, tg_chat_id, notify_email)
                 conn.commit()
                 print(f"Price changes found: {n}")
 
-            time.sleep(2)
+            time.sleep(1.5)
 
         except Exception as e:
             print(f"Monitor {mon['id']} error:", e)

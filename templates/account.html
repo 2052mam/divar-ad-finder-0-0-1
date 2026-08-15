@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حساب کاربری | دیده‌بان دیوار</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#E4E9F2;--bg-el:#EDF1F8;--shadow-d:#AAB4C6;--shadow-l:#fff;--ink:#2C3347;--ink-soft:#707C8F;--violet:#6C5DD3;--violet-deep:#5347B0;--teal:#0FA595;--rose:#EF5A79}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);font-family:Vazirmatn,Tahoma,sans-serif;color:var(--ink);padding:24px}
+.wrap{max-width:640px;margin:0 auto}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.top a{color:var(--ink-soft);text-decoration:none;font-weight:600;font-size:.85rem}
+h1{font-size:1.4rem;margin:0 0 20px}
+.card{background:var(--bg-el);border-radius:20px;padding:22px;margin-bottom:18px;box-shadow:8px 8px 18px var(--shadow-d),-8px -8px 18px var(--shadow-l)}
+.card h3{margin:0 0 14px;font-size:1rem}
+.row{display:flex;justify-content:space-between;padding:8px 0;font-size:.88rem;border-bottom:1px dashed var(--shadow-d)}
+.row:last-child{border-bottom:none}
+.row b{color:var(--ink)}
+.badge{display:inline-block;padding:4px 12px;border-radius:99px;font-size:.75rem;font-weight:700}
+.badge.on{background:#DEF6F1;color:#0C7E72}
+.badge.off{background:#FCE7EC;color:#C22448}
+label{display:block;font-size:.82rem;color:var(--ink-soft);margin:10px 0 6px}
+input{width:100%;padding:11px 13px;border:none;border-radius:10px;background:var(--bg-el);box-shadow:inset 3px 3px 8px var(--shadow-d),inset -3px -3px 8px var(--shadow-l);font-family:inherit}
+button{margin-top:14px;padding:11px 20px;border:none;border-radius:10px;background:linear-gradient(145deg,var(--violet),var(--violet-deep));color:#fff;font-weight:700;cursor:pointer;font-family:inherit}
+.msg{margin-top:12px;font-size:.85rem;color:var(--teal);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a href="/">← بازگشت به داشبورد</a>
+    {% if user.role == 'admin' %}<a href="/admin">پنل مدیریت</a>{% endif %}
+  </div>
+  <h1>حساب کاربری</h1>
+
+  <div class="card">
+    <h3>وضعیت اشتراک</h3>
+    <div class="row"><span>نام کاربری</span><b>{{ user.username }}</b></div>
+    <div class="row"><span>نقش</span><b>{{ 'مدیر' if user.role == 'admin' else 'کاربر' }}</b></div>
+    <div class="row"><span>پلن</span><b>{{ user.plan }}</b></div>
+    <div class="row"><span>وضعیت</span>
+      <span class="badge {{ 'on' if sub_active else 'off' }}">{{ 'فعال' if sub_active else 'غیرفعال / منقضی' }}</span>
+    </div>
+    <div class="row"><span>تاریخ انقضا</span><b>{{ user.subscription_expires_at or '—' }}</b></div>
+    <div class="row"><span>سقف مانیتور</span><b>{{ user.max_monitors }}</b></div>
+  </div>
+
+  <div class="card">
+    <h3>تغییر رمز عبور</h3>
+    <form method="post">
+      <input type="hidden" name="action" value="password">
+      <label>رمز فعلی</label>
+      <input type="password" name="current_password" required>
+      <label>رمز جدید (حداقل ۶ کاراکتر)</label>
+      <input type="password" name="new_password" required minlength="6">
+      <button type="submit">تغییر رمز</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>تنظیمات اعلان شخصی (اختیاری)</h3>
+    <form method="post">
+      <input type="hidden" name="action" value="notify">
+      <label>Telegram Chat ID</label>
+      <input name="telegram_chat_id" value="{{ user.telegram_chat_id or '' }}" placeholder="خالی = استفاده از تنظیمات پیش‌فرض">
+      <label>ایمیل شخصی</label>
+      <input name="notify_email" value="{{ user.notify_email or '' }}" placeholder="خالی = استفاده از تنظیمات پیش‌فرض">
+      <button type="submit">ذخیره</button>
+    </form>
+  </div>
+
+  {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+</div>
+</body>
+</html>

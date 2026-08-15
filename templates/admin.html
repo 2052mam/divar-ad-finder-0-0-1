@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>پنل مدیریت | دیده‌بان دیوار</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#E4E9F2;--bg-el:#EDF1F8;--shadow-d:#AAB4C6;--shadow-l:#fff;--ink:#2C3347;--ink-soft:#707C8F;--violet:#6C5DD3;--violet-deep:#5347B0;--teal:#0FA595;--rose:#EF5A79}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);font-family:Vazirmatn,Tahoma,sans-serif;color:var(--ink);padding:20px}
+.wrap{max-width:1100px;margin:0 auto}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.top a{color:var(--ink-soft);text-decoration:none;font-weight:600;font-size:.85rem}
+h1{font-size:1.4rem;margin:0}
+.card{background:var(--bg-el);border-radius:18px;padding:20px;margin-bottom:20px;box-shadow:8px 8px 18px var(--shadow-d),-8px -8px 18px var(--shadow-l)}
+.card h3{margin:0 0 14px;font-size:1rem}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+input,select{width:100%;padding:10px 12px;border:none;border-radius:10px;background:var(--bg-el);box-shadow:inset 3px 3px 8px var(--shadow-d),inset -3px -3px 8px var(--shadow-l);font-family:inherit;font-size:.85rem}
+label{display:block;font-size:.75rem;color:var(--ink-soft);margin-bottom:4px}
+button{padding:10px 18px;border:none;border-radius:10px;background:linear-gradient(145deg,var(--violet),var(--violet-deep));color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:.85rem}
+button.danger{background:linear-gradient(145deg,#EF5A79,#C22448)}
+button.ghost{background:var(--bg-el);color:var(--ink-soft);box-shadow:3px 3px 8px var(--shadow-d),-3px -3px 8px var(--shadow-l)}
+table{width:100%;border-collapse:separate;border-spacing:0 8px;font-size:.82rem}
+thead th{text-align:right;color:var(--ink-soft);font-weight:700;padding:0 10px 6px;font-size:.75rem}
+tbody tr{background:var(--bg-el);box-shadow:3px 3px 8px var(--shadow-d),-3px -3px 8px var(--shadow-l)}
+tbody td{padding:10px;vertical-align:middle}
+tbody tr td:first-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+tbody tr td:last-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:.7rem;font-weight:700}
+.badge.on{background:#DEF6F1;color:#0C7E72}
+.badge.off{background:#FCE7EC;color:#C22448}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.actions button{padding:6px 10px;font-size:.72rem}
+@media(max-width:760px){table{min-width:700px}.card{overflow-x:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>پنل مدیریت کاربران</h1>
+    <a href="/">← بازگشت به داشبورد</a>
+  </div>
+
+  <div class="card">
+    <h3>ساخت کاربر جدید</h3>
+    <div class="form-grid">
+      <div><label>نام کاربری</label><input id="nu_username"></div>
+      <div><label>رمز عبور</label><input id="nu_password" type="password"></div>
+      <div><label>نقش</label>
+        <select id="nu_role"><option value="user">کاربر</option><option value="admin">مدیر</option></select>
+      </div>
+      <div><label>پلن</label><input id="nu_plan" value="pro"></div>
+      <div><label>تعداد روز اشتراک</label><input id="nu_days" type="number" value="30"></div>
+      <div><label>سقف مانیتور</label><input id="nu_max" type="number" value="3"></div>
+    </div>
+    <button style="margin-top:14px" onclick="createUser()">ساخت کاربر</button>
+  </div>
+
+  <div class="card">
+    <h3>لیست کاربران</h3>
+    <table>
+      <thead><tr>
+        <th>نام کاربری</th><th>نقش</th><th>پلن</th><th>وضعیت</th><th>انقضا</th><th>سقف مانیتور</th><th>عملیات</th>
+      </tr></thead>
+      <tbody id="usersBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function loadUsers(){
+  const res = await fetch('/api/admin/users');
+  const list = await res.json();
+  const body = document.getElementById('usersBody');
+  body.innerHTML = '';
+  const now = new Date();
+  list.forEach(u => {
+    let active = false;
+    if (u.role === 'admin') active = true;
+    else if (u.subscription_expires_at) active = new Date(u.subscription_expires_at) > now;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.username}</td>
+      <td>${u.role === 'admin' ? 'مدیر' : 'کاربر'}</td>
+      <td>${u.plan}</td>
+      <td><span class="badge ${active ? 'on':'off'}">${active ? 'فعال':'غیرفعال'}</span> ${u.is_active ? '' : '<span class="badge off">مسدود</span>'}</td>
+      <td>${u.subscription_expires_at ? u.subscription_expires_at.slice(0,10) : '—'}</td>
+      <td>${u.max_monitors}</td>
+      <td class="actions">
+        <button class="ghost" onclick="extend(${u.id},30)">+۳۰ روز</button>
+        <button class="ghost" onclick="extend(${u.id},7)">+۷ روز</button>
+        <button class="ghost" onclick="toggleActive(${u.id}, ${u.is_active})">${u.is_active ? 'مسدود کن':'فعال کن'}</button>
+        <button class="ghost" onclick="editMax(${u.id}, ${u.max_monitors})">سقف مانیتور</button>
+        ${u.role !== 'admin' ? `<button class="danger" onclick="delUser(${u.id})">حذف</button>` : ''}
+      </td>`;
+    body.appendChild(tr);
+  });
+}
+
+async function createUser(){
+  const payload = {
+    username: document.getElementById('nu_username').value.trim(),
+    password: document.getElementById('nu_password').value,
+    role: document.getElementById('nu_role').value,
+    plan: document.getElementById('nu_plan').value,
+    days: parseInt(document.getElementById('nu_days').value || '30'),
+    max_monitors: parseInt(document.getElementById('nu_max').value || '3'),
+  };
+  if (!payload.username || payload.password.length < 6){ alert('نام کاربری/رمز عبور نامعتبر است (رمز حداقل ۶ کاراکتر)'); return; }
+  const res = await fetch('/api/admin/users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (data.success){ alert('کاربر ساخته شد'); loadUsers(); }
+  else alert('خطا: ' + (data.error || 'نامشخص'));
+}
+
+async function extend(id, days){
+  await fetch(`/api/admin/users/${id}/extend`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({days}) });
+  loadUsers();
+}
+async function toggleActive(id, current){
+  await fetch(`/api/admin/users/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_active: current ? 0 : 1}) });
+  loadUsers();
+}
+async function editMax(id, current){
+  const val = prompt('سقف تعداد مانیتور جدید:', current);
+  if (val === null) return;
+  await fetch(`/api/admin/users/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({max_monitors: parseInt(val)}) });
+  loadUsers();
+}
+async function delUser(id){
+  if (!confirm('این کاربر و تمام مانیتورهایش حذف شود؟')) return;
+  await fetch(`/api/admin/users/${id}`, { method:'DELETE' });
+  loadUsers();
+}
+loadUsers();
+</script>
+</body>
+</html>
