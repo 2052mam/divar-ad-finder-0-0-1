@@ -30,6 +30,7 @@ from config import (
     TRIAL_DAYS,
     SEARCH_COOLDOWN_SECONDS,
     MAX_PARALLEL_DIVAR_REQUESTS,
+    SEARCH_RESULT_PAGES,
 )
 
 app = Flask(__name__)
@@ -654,6 +655,57 @@ def search_divar(payload: Dict) -> Dict:
         return {}
 
 
+def search_divar_legacy(city_id: str, category_slug: str, page: int = 1, last_post_date: Optional[int] = None) -> Dict:
+    """Fallback used by the broad default search.
+
+    The modern widget endpoint is best for filtered queries, but Divar's normal
+    category page can return many pages through this older public endpoint.
+    Response is converted to the same POST_ROW-like shape used by extract_ads.
+    """
+    payload = {"page": page}
+    if last_post_date:
+        payload["last-post-date"] = last_post_date
+    try:
+        r = requests.post(
+            f"https://api.divar.ir/v8/search/{city_id}/{category_slug}",
+            headers=HEADERS,
+            json=payload,
+            timeout=25,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print("legacy search error:", e)
+        return {}
+
+
+def normalize_legacy_search_data(data: Dict) -> Dict:
+    widgets = []
+    for item in (data.get("web_widgets") or {}).get("post_list", []) or []:
+        widget_data = item.get("data") or {}
+        payload = (((widget_data.get("action") or {}).get("payload")) or {})
+        token = payload.get("token")
+        if not token:
+            continue
+        # Keep enough fields for extract_ads() while preserving the raw item for fallback.
+        widgets.append({
+            "widget_type": "POST_ROW",
+            "data": {
+                "token": token,
+                "title": widget_data.get("title"),
+                "middle_description_text": widget_data.get("middle_description_text")
+                    or item.get("description")
+                    or "\n".join(widget_data.get("desc_lines") or []),
+                "top_description_text": widget_data.get("top_description_text")
+                    or item.get("normal_text")
+                    or item.get("business_text"),
+                "red_text": item.get("red_text") or widget_data.get("red_text") or "",
+                "image_url": item.get("image") or widget_data.get("image_url"),
+            },
+        })
+    return {"list_widgets": widgets}
+
+
 def extract_ads(data: Dict) -> List[Dict]:
     ads = []
     for w in data.get("list_widgets", []):
@@ -680,40 +732,185 @@ def extract_ads(data: Dict) -> List[Dict]:
     return ads
 
 
+def extract_place_ids(data: Dict) -> List[str]:
+    """Collect Divar's internal pagination tokens from a search response."""
+    place_ids = []
+    for key in ("last_post_date", "next_cursor", "cursor"):
+        value = data.get(key)
+        if value is not None:
+            place_ids.append(str(value))
+
+    for w in data.get("list_widgets", []) or []:
+        if w.get("widget_type") != "POST_ROW":
+            continue
+        p = w.get("data", {})
+        for key in ("place_id", "id", "token"):
+            value = p.get(key)
+            if value:
+                place_ids.append(str(value))
+    # Keep order but remove duplicates.
+    return list(dict.fromkeys(place_ids))
+
+
+def build_search_payload(
+    category: str,
+    city_ids,
+    query: Optional[str] = None,
+    min_price=None,
+    max_price=None,
+    recent_ads=None,
+    sort="sort_date",
+    has_photo=None,
+    has_installment=None,
+    has_video=None,
+    business_type="ALL",
+    status=None,
+    internal_storage=None,
+    ram_memory=None,
+    sim_card_slot=None,
+    base_color=None,
+    year_min=None,
+    year_max=None,
+    usage_min=None,
+    usage_max=None,
+    body_status=None,
+    chassis_status=None,
+    motor_status=None,
+    gearbox=None,
+    fuel_type=None,
+    color=None,
+    origin=None,
+):
+    """Build the same payload Divar's web app sends for a normal search.
+
+    A normal Divar search (e.g. «پراید 132») is sent as `query` to the
+    postlist endpoint with `source_view=SEARCH_BAR_QUERY_SUGGESTION`.
+    Filters (price, photo, etc.) are only included when actually set.
+    """
+    category_slug = "mobile-phones" if category == "mobile" else "light"
+    form = {"category": {"str": {"value": category_slug}}}
+
+    if recent_ads not in (None, ""):
+        form["recent_ads"] = {"str": {"value": recent_ads}}
+    if has_photo is not None:
+        form["has-photo"] = {"boolean": {"value": has_photo}}
+    if has_installment is not None:
+        form["has_installment_sale"] = {"boolean": {"value": has_installment}}
+    if category == "car" and has_video is not None:
+        form["has-video"] = {"boolean": {"value": has_video}}
+
+    if category == "mobile":
+        if status:
+            form["status"] = {"repeated_string": {"value": status}}
+        if internal_storage:
+            form["internal_storage"] = {"repeated_string": {"value": internal_storage}}
+        if ram_memory:
+            form["ram_memory"] = {"repeated_string": {"value": ram_memory}}
+        if sim_card_slot:
+            form["sim_card_slot"] = {"repeated_string": {"value": sim_card_slot}}
+        if base_color:
+            form["base_color"] = {"repeated_string": {"value": base_color}}
+        if business_type == "personal":
+            form["goods-business-type"] = {"repeated_string": {"value": ["personal"]}}
+        elif business_type == "marketplace":
+            form["goods-business-type"] = {"repeated_string": {"value": ["marketplace"]}}
+    else:
+        if body_status:
+            form["body_status"] = {"repeated_string": {"value": body_status}}
+        if chassis_status:
+            form["chassis_status"] = {"str": {"value": chassis_status[0]}}
+        if motor_status:
+            form["motor_status"] = {"str": {"value": motor_status[0]}}
+        if gearbox:
+            form["gearbox"] = {"str": {"value": gearbox[0]}}
+        if fuel_type:
+            form["fuel_type"] = {"repeated_string": {"value": fuel_type}}
+        if color:
+            form["color"] = {"repeated_string": {"value": color}}
+        if origin:
+            form["brand_model_manufacturer_origin"] = {"repeated_string": {"value": origin}}
+
+    def number_range(min_v, max_v):
+        rng = {}
+        if min_v not in (None, ""):
+            rng["minimum"] = str(min_v)
+        if max_v not in (None, ""):
+            rng["maximum"] = str(max_v)
+        return {"number_range": rng} if rng else None
+
+    price = number_range(min_price, max_price)
+    if price:
+        form["price"] = price
+    if category == "car":
+        year = number_range(year_min, year_max)
+        if year:
+            form["production-year"] = year
+        usage = number_range(usage_min, usage_max)
+        if usage:
+            form["usage"] = usage
+
+    payload = {
+        "city_ids": city_ids,
+        "source_view": "SEARCH_BAR_QUERY_SUGGESTION",
+        "disable_recommendation": False,
+        "map_state": {"camera_info": {"bbox": {}}},
+        "search_data": {
+            "form_data": {"data": form},
+            "server_payload": {
+                "@type": "type.googleapis.com/widgets.SearchData.ServerPayload",
+                "additional_form_data": {"data": {"sort": {"str": {"value": sort}}}},
+            },
+        },
+        "previous_place_ids": [],
+    }
+    if query not in (None, ""):
+        payload["query"] = query
+    return payload
+
+
 def build_mobile_payload(
-    city_ids, brand_models, min_price="1000000", max_price="900000000",
-    recent_ads="1d", sort="sort_date", has_photo=True, has_installment=False,
+    city_ids, brand_models=None, min_price=None, max_price=None,
+    recent_ads=None, sort="sort_date", has_photo=None, has_installment=None,
     business_type="ALL", status=None, internal_storage=None, ram_memory=None,
     sim_card_slot=None, base_color=None,
 ):
-    status = status or ["ALL_POSSIBLE_OPTIONS"]
-    internal_storage = internal_storage or ["ALL_POSSIBLE_OPTIONS"]
-    ram_memory = ram_memory or ["ALL_POSSIBLE_OPTIONS"]
-    sim_card_slot = sim_card_slot or ["ALL_POSSIBLE_OPTIONS"]
-    base_color = base_color or ["ALL_POSSIBLE_OPTIONS"]
-    if not brand_models:
-        brand_models = [m for lst in MOBILE_MODELS.values() for m in lst]
-
     form = {
-        "brand_model": {"repeated_string": {"value": brand_models}},
-        "has_installment_sale": {"boolean": {"value": has_installment}},
-        "has-photo": {"boolean": {"value": has_photo}},
-        "originality": {"str": {"value": "original"}},
-        "price": {"number_range": {"minimum": str(min_price), "maximum": str(max_price)}},
-        "recent_ads": {"str": {"value": recent_ads}},
         "category": {"str": {"value": "mobile-phones"}},
-        "status": {"repeated_string": {"value": status}},
-        "internal_storage": {"repeated_string": {"value": internal_storage}},
-        "ram_memory": {"repeated_string": {"value": ram_memory}},
-        "sim_card_slot": {"repeated_string": {"value": sim_card_slot}},
-        "base_color": {"repeated_string": {"value": base_color}},
     }
+
+    if recent_ads not in (None, ""):
+        form["recent_ads"] = {"str": {"value": recent_ads}}
+    if has_photo is not None:
+        form["has-photo"] = {"boolean": {"value": has_photo}}
+    if has_installment is not None:
+        form["has_installment_sale"] = {"boolean": {"value": has_installment}}
+
+    # brand_models=None means "do not restrict to any model"; an explicit list means filter.
+    if brand_models is not None:
+        form["brand_model"] = {"repeated_string": {"value": brand_models}}
+    if status:
+        form["status"] = {"repeated_string": {"value": status}}
+    if internal_storage:
+        form["internal_storage"] = {"repeated_string": {"value": internal_storage}}
+    if ram_memory:
+        form["ram_memory"] = {"repeated_string": {"value": ram_memory}}
+    if sim_card_slot:
+        form["sim_card_slot"] = {"repeated_string": {"value": sim_card_slot}}
+    if base_color:
+        form["base_color"] = {"repeated_string": {"value": base_color}}
+
+    price_range = {}
+    if min_price not in (None, ""):
+        price_range["minimum"] = str(min_price)
+    if max_price not in (None, ""):
+        price_range["maximum"] = str(max_price)
+    if price_range:
+        form["price"] = {"number_range": price_range}
+
     if business_type == "personal":
         form["goods-business-type"] = {"repeated_string": {"value": ["personal"]}}
     elif business_type == "marketplace":
         form["goods-business-type"] = {"repeated_string": {"value": ["marketplace"]}}
-    else:
-        form["goods-business-type"] = {"repeated_string": {"value": ["ALL_POSSIBLE_OPTIONS"]}}
 
     return {
         "city_ids": city_ids,
@@ -732,45 +929,75 @@ def build_mobile_payload(
 
 
 def build_car_payload(
-    city_ids, brand_models, min_price="100000000", max_price="5000000000",
-    recent_ads="1d", sort="sort_date", has_photo=True, has_installment=False,
-    has_video=False, year_min="1390", year_max="1404", usage_min="0", usage_max="300000",
+    city_ids, brand_models=None, min_price=None, max_price=None,
+    recent_ads=None, sort="sort_date", has_photo=None, has_installment=None,
+    has_video=None, year_min=None, year_max=None, usage_min=None, usage_max=None,
     body_status=None, chassis_status=None, motor_status=None, gearbox=None,
-    fuel_type=None, color=None, origin=None,
+    fuel_type=None, color=None, origin=None, insurance_min=None, insurance_max=None,
 ):
-    if not brand_models:
-        brand_models = [m for lst in CAR_MODELS.values() for m in lst]
-    body_status = body_status or ["ALL_POSSIBLE_OPTIONS"]
-    chassis_list = chassis_status or []
-    chassis_val = chassis_list[0] if chassis_list else "both-healthy"
-    motor_status = motor_status or ["ALL_POSSIBLE_OPTIONS"]
-    gearbox = gearbox or ["ALL_POSSIBLE_OPTIONS"]
-    fuel_type = fuel_type or ["ALL_POSSIBLE_OPTIONS"]
-    color = color or ["ALL_POSSIBLE_OPTIONS"]
-    origin = origin or ["ALL_POSSIBLE_OPTIONS"]
-    motor_val = motor_status[0] if motor_status and motor_status[0] != "ALL_POSSIBLE_OPTIONS" else "healthy"
-    gear_val = gearbox[0] if gearbox and gearbox[0] != "ALL_POSSIBLE_OPTIONS" else "manual"
-
     form = {
-        "brand_model": {"repeated_string": {"value": brand_models}},
-        "body_status": {"repeated_string": {"value": body_status}},
-        "brand_model_manufacturer_origin": {"repeated_string": {"value": origin}},
-        "chassis_status": {"str": {"value": chassis_val}},
-        "color": {"repeated_string": {"value": color}},
-        "exchange": {"str": {"value": "exclude-exchanges"}},
-        "fuel_type": {"repeated_string": {"value": fuel_type}},
-        "gearbox": {"str": {"value": gear_val}},
-        "has_installment_sale": {"boolean": {"value": has_installment}},
-        "has-photo": {"boolean": {"value": has_photo}},
-        "has-video": {"boolean": {"value": has_video}},
-        "motor_status": {"str": {"value": motor_val}},
-        "price": {"number_range": {"minimum": str(min_price), "maximum": str(max_price)}},
-        "production-year": {"number_range": {"minimum": str(year_min), "maximum": str(year_max)}},
-        "recent_ads": {"str": {"value": recent_ads}},
-        "third_party_insurance_deadline": {"number_range": {"minimum": "1", "maximum": "12"}},
-        "usage": {"number_range": {"minimum": str(usage_min), "maximum": str(usage_max)}},
         "category": {"str": {"value": "light"}},
     }
+
+    if recent_ads not in (None, ""):
+        form["recent_ads"] = {"str": {"value": recent_ads}}
+    if has_photo is not None:
+        form["has-photo"] = {"boolean": {"value": has_photo}}
+    if has_installment is not None:
+        form["has_installment_sale"] = {"boolean": {"value": has_installment}}
+    if has_video is not None:
+        form["has-video"] = {"boolean": {"value": has_video}}
+
+    if body_status:
+        form["body_status"] = {"repeated_string": {"value": body_status}}
+    if origin:
+        form["brand_model_manufacturer_origin"] = {"repeated_string": {"value": origin}}
+    if chassis_status:
+        form["chassis_status"] = {"str": {"value": chassis_status[0]}}
+    if color:
+        form["color"] = {"repeated_string": {"value": color}}
+    if fuel_type:
+        form["fuel_type"] = {"repeated_string": {"value": fuel_type}}
+    if gearbox:
+        form["gearbox"] = {"str": {"value": gearbox[0]}}
+    if motor_status:
+        form["motor_status"] = {"str": {"value": motor_status[0]}}
+
+    if brand_models is not None:
+        form["brand_model"] = {"repeated_string": {"value": brand_models}}
+
+    price_range = {}
+    if min_price not in (None, ""):
+        price_range["minimum"] = str(min_price)
+    if max_price not in (None, ""):
+        price_range["maximum"] = str(max_price)
+    if price_range:
+        form["price"] = {"number_range": price_range}
+
+    year_range = {}
+    if year_min not in (None, ""):
+        year_range["minimum"] = str(year_min)
+    if year_max not in (None, ""):
+        year_range["maximum"] = str(year_max)
+    if year_range:
+        form["production-year"] = {"number_range": year_range}
+
+    usage_range = {}
+    if usage_min not in (None, ""):
+        usage_range["minimum"] = str(usage_min)
+    if usage_max not in (None, ""):
+        usage_range["maximum"] = str(usage_max)
+    if usage_range:
+        form["usage"] = {"number_range": usage_range}
+
+    insurance_range = {}
+    if insurance_min not in (None, ""):
+        insurance_range["minimum"] = str(insurance_min)
+    if insurance_max not in (None, ""):
+        insurance_range["maximum"] = str(insurance_max)
+    if insurance_range:
+        form["third_party_insurance_deadline"] = {"number_range": insurance_range}
+
     return {
         "city_ids": city_ids,
         "source_view": "FILTER",
@@ -808,19 +1035,174 @@ def finalize_ads(ads: List[Dict], keywords: List[str], negative_keywords: List[s
 
 
 # ====================== worker functions (parallel per-model) ======================
-def process_model_smart(model, category, city_ids, recent_ads, business_type, min_smart_score):
-    try:
-        if category == "mobile":
-            payload = build_mobile_payload(city_ids, [model], recent_ads=recent_ads,
-                                            has_photo=True, has_installment=False, business_type=business_type)
-            score_fn = mobile_value_score
-        else:
-            payload = build_car_payload(city_ids, [model], recent_ads=recent_ads,
-                                         has_photo=True, has_installment=False)
-            score_fn = car_value_score
+def fetch_divar_pages(payload: Dict, max_pages: int = 1) -> List[Dict]:
+    """Fetch multiple pages from the modern Divar widget endpoint.
+
+    Pagination is cursor-based: after each page we feed the tokens of all
+    returned posts back via `previous_place_ids`; Divar then returns the next
+    batch. There is no numeric `page` parameter.
+    """
+    all_ads = []
+    seen_tokens = set()
+    previous_place_ids = []
+    for _ in range(max(1, int(max_pages))):
+        page_payload = json.loads(json.dumps(payload, ensure_ascii=False))
+        page_payload["previous_place_ids"] = previous_place_ids
+        # Remove any stale numeric page if a caller added one; the cursor is
+        # what drives pagination.
+        page_payload.pop("page", None)
         with SEARCH_SEMAPHORE:
-            raw = search_divar(payload)
-        ads = [a for a in extract_ads(raw) if is_model_match(a.get("title", ""), model)]
+            raw = search_divar(page_payload)
+        ads = extract_ads(raw)
+        if not ads:
+            break
+        new_count = 0
+        for ad in ads:
+            token = ad.get("token")
+            if token and token not in seen_tokens:
+                seen_tokens.add(token)
+                all_ads.append(ad)
+                new_count += 1
+        previous_place_ids = list(seen_tokens)
+        if len(ads) < 10 or new_count == 0:
+            break
+    return all_ads
+
+
+def fetch_legacy_pages(city_id: str, category_slug: str, max_pages: int) -> List[Dict]:
+    """Fetch several pages using Divar's older public category endpoint.
+
+    This endpoint exposes explicit `last_post_date` pagination and is the most
+    reliable way to reproduce the normal Divar category listing volume.
+    """
+    all_ads = []
+    seen_tokens = set()
+    last_post_date = None
+    for page in range(1, max(1, int(max_pages)) + 1):
+        with SEARCH_SEMAPHORE:
+            raw = search_divar_legacy(city_id, category_slug, page=page, last_post_date=last_post_date)
+        ads = extract_ads(normalize_legacy_search_data(raw))
+        if not ads:
+            break
+        last_post_date = raw.get("last_post_date") or last_post_date
+        new_count = 0
+        for ad in ads:
+            if ad["token"] not in seen_tokens:
+                seen_tokens.add(ad["token"])
+                all_ads.append(ad)
+                new_count += 1
+        if len(ads) < 10 or new_count == 0:
+            break
+    return all_ads
+
+
+def is_broad_unfiltered_search(category: str, recent_ads, data: Dict) -> bool:
+    if recent_ads not in (None, ""):
+        return False
+    for key in ("has_photo", "has_installment", "has_video"):
+        if data.get(key):
+            return False
+    for key in ("min_price", "max_price", "year_min", "year_max", "usage_min", "usage_max"):
+        if data.get(key) not in (None, ""):
+            return False
+    for key in (
+        "status", "internal_storage", "ram_memory", "sim_card_slot", "base_color",
+        "body_status", "chassis_status", "motor_status", "gearbox", "fuel_type", "color", "origin",
+    ):
+        if data.get(key):
+            return False
+    if category == "mobile" and data.get("business_type") not in (None, "", "ALL"):
+        return False
+    return True
+
+
+def build_payload_for_model(category: str, model, city_ids, recent_ads: str, data: Dict):
+    """Construct a Divar payload.
+
+    Pass model=None for the broad/default category search (like opening Divar's
+    mobile or car category without selecting a model). Pass a model string to
+    restrict results to that model.
+    """
+    brand_models = None if model is None else [model]
+    if category == "mobile":
+        return build_mobile_payload(
+            city_ids, brand_models, recent_ads=recent_ads,
+            has_photo=True if data.get("has_photo") else None,
+            has_installment=True if data.get("has_installment") else None,
+            business_type=data.get("business_type", "ALL"),
+            min_price=data.get("min_price") or None,
+            max_price=data.get("max_price") or None,
+            sort=data.get("sort", "sort_date"),
+            status=data.get("status") or ["ALL_POSSIBLE_OPTIONS"],
+            internal_storage=data.get("internal_storage") or ["ALL_POSSIBLE_OPTIONS"],
+            ram_memory=data.get("ram_memory") or ["ALL_POSSIBLE_OPTIONS"],
+            sim_card_slot=data.get("sim_card_slot") or ["ALL_POSSIBLE_OPTIONS"],
+            base_color=data.get("base_color") or ["ALL_POSSIBLE_OPTIONS"],
+        )
+
+    return build_car_payload(
+        city_ids, brand_models, recent_ads=recent_ads,
+        has_photo=True if data.get("has_photo") else None,
+        has_installment=True if data.get("has_installment") else None,
+        has_video=True if data.get("has_video") else None,
+        min_price=data.get("min_price") or None,
+        max_price=data.get("max_price") or None,
+        year_min=data.get("year_min") or None,
+        year_max=data.get("year_max") or None,
+        usage_min=data.get("usage_min") or None,
+        usage_max=data.get("usage_max") or None,
+        body_status=data.get("body_status") or ["ALL_POSSIBLE_OPTIONS"],
+        chassis_status=data.get("chassis_status"),
+        motor_status=data.get("motor_status") or ["ALL_POSSIBLE_OPTIONS"],
+        gearbox=data.get("gearbox") or ["ALL_POSSIBLE_OPTIONS"],
+        fuel_type=data.get("fuel_type") or ["ALL_POSSIBLE_OPTIONS"],
+        color=data.get("color") or ["ALL_POSSIBLE_OPTIONS"],
+        origin=data.get("origin") or ["ALL_POSSIBLE_OPTIONS"],
+        sort=data.get("sort", "sort_date"),
+    )
+
+
+def build_query_payload(category: str, city_ids, query: Optional[str], recent_ads: Optional[str], data: Dict) -> Dict:
+    return build_search_payload(
+        category,
+        city_ids,
+        query=query,
+        recent_ads=recent_ads,
+        sort=data.get("sort", "sort_date"),
+        has_photo=True if data.get("has_photo") else None,
+        has_installment=True if data.get("has_installment") else None,
+        has_video=True if data.get("has_video") else None,
+        business_type=data.get("business_type", "ALL"),
+        min_price=data.get("min_price") or None,
+        max_price=data.get("max_price") or None,
+        status=data.get("status"),
+        internal_storage=data.get("internal_storage"),
+        ram_memory=data.get("ram_memory"),
+        sim_card_slot=data.get("sim_card_slot"),
+        base_color=data.get("base_color"),
+        year_min=data.get("year_min") or None,
+        year_max=data.get("year_max") or None,
+        usage_min=data.get("usage_min") or None,
+        usage_max=data.get("usage_max") or None,
+        body_status=data.get("body_status"),
+        chassis_status=data.get("chassis_status"),
+        motor_status=data.get("motor_status"),
+        gearbox=data.get("gearbox"),
+        fuel_type=data.get("fuel_type"),
+        color=data.get("color"),
+        origin=data.get("origin"),
+    )
+
+
+def process_model_smart(model, category, city_ids, recent_ads, business_type, min_smart_score, max_pages=2):
+    try:
+        smart_data = {
+            "business_type": business_type,
+        }
+        payload = build_payload_for_model(category, model, city_ids, recent_ads, smart_data)
+        score_fn = mobile_value_score if category == "mobile" else car_value_score
+        ads = [a for a in fetch_divar_pages(payload, max_pages=max_pages)
+               if is_model_match(a.get("title", ""), model)]
         prices = [a["price_num"] for a in ads if a.get("price_num")]
         if not prices:
             return model, None, []
@@ -844,41 +1226,11 @@ def process_model_smart(model, category, city_ids, recent_ads, business_type, mi
         return model, None, []
 
 
-def process_model_avg(model, category, city_ids, recent_ads, data):
+def process_model_avg(model, category, city_ids, recent_ads, data, max_pages=2):
     try:
-        if category == "mobile":
-            payload = build_mobile_payload(
-                city_ids, [model], recent_ads=recent_ads,
-                has_photo=data.get("has_photo", True), has_installment=data.get("has_installment", False),
-                business_type=data.get("business_type", "ALL"),
-                min_price=str(data.get("min_price", "1000000")), max_price=str(data.get("max_price", "900000000")),
-                sort=data.get("sort", "sort_date"),
-                status=data.get("status") or ["ALL_POSSIBLE_OPTIONS"],
-                internal_storage=data.get("internal_storage") or ["ALL_POSSIBLE_OPTIONS"],
-                ram_memory=data.get("ram_memory") or ["ALL_POSSIBLE_OPTIONS"],
-                sim_card_slot=data.get("sim_card_slot") or ["ALL_POSSIBLE_OPTIONS"],
-                base_color=data.get("base_color") or ["ALL_POSSIBLE_OPTIONS"],
-            )
-        else:
-            payload = build_car_payload(
-                city_ids, [model], recent_ads=recent_ads,
-                has_photo=data.get("has_photo", True), has_installment=data.get("has_installment", False),
-                has_video=data.get("has_video", False),
-                min_price=str(data.get("min_price", "100000000")), max_price=str(data.get("max_price", "5000000000")),
-                year_min=str(data.get("year_min", "1390")), year_max=str(data.get("year_max", "1404")),
-                usage_min=str(data.get("usage_min", "0")), usage_max=str(data.get("usage_max", "300000")),
-                body_status=data.get("body_status") or ["ALL_POSSIBLE_OPTIONS"],
-                chassis_status=data.get("chassis_status"),
-                motor_status=data.get("motor_status") or ["ALL_POSSIBLE_OPTIONS"],
-                gearbox=data.get("gearbox") or ["ALL_POSSIBLE_OPTIONS"],
-                fuel_type=data.get("fuel_type") or ["ALL_POSSIBLE_OPTIONS"],
-                color=data.get("color") or ["ALL_POSSIBLE_OPTIONS"],
-                origin=data.get("origin") or ["ALL_POSSIBLE_OPTIONS"],
-                sort=data.get("sort", "sort_date"),
-            )
-        with SEARCH_SEMAPHORE:
-            raw = search_divar(payload)
-        ads = [a for a in extract_ads(raw) if is_model_match(a.get("title", ""), model)]
+        payload = build_payload_for_model(category, model, city_ids, recent_ads, data)
+        ads = [a for a in fetch_divar_pages(payload, max_pages=max_pages)
+               if is_model_match(a.get("title", ""), model)]
         prices = [a["price_num"] for a in ads if a.get("price_num")]
         if not prices:
             return model, None, []
@@ -890,41 +1242,11 @@ def process_model_avg(model, category, city_ids, recent_ads, data):
         return model, None, []
 
 
-def process_model_normal(model, category, city_ids, recent_ads, data):
+def process_model_normal(model, category, city_ids, recent_ads, data, max_pages=2):
     try:
-        if category == "mobile":
-            payload = build_mobile_payload(
-                city_ids, [model], recent_ads=recent_ads,
-                has_photo=data.get("has_photo", True), has_installment=data.get("has_installment", False),
-                business_type=data.get("business_type", "ALL"),
-                min_price=str(data.get("min_price", "1000000")), max_price=str(data.get("max_price", "900000000")),
-                sort=data.get("sort", "sort_date"),
-                status=data.get("status") or ["ALL_POSSIBLE_OPTIONS"],
-                internal_storage=data.get("internal_storage") or ["ALL_POSSIBLE_OPTIONS"],
-                ram_memory=data.get("ram_memory") or ["ALL_POSSIBLE_OPTIONS"],
-                sim_card_slot=data.get("sim_card_slot") or ["ALL_POSSIBLE_OPTIONS"],
-                base_color=data.get("base_color") or ["ALL_POSSIBLE_OPTIONS"],
-            )
-        else:
-            payload = build_car_payload(
-                city_ids, [model], recent_ads=recent_ads,
-                has_photo=data.get("has_photo", True), has_installment=data.get("has_installment", False),
-                has_video=data.get("has_video", False),
-                min_price=str(data.get("min_price", "100000000")), max_price=str(data.get("max_price", "5000000000")),
-                year_min=str(data.get("year_min", "1390")), year_max=str(data.get("year_max", "1404")),
-                usage_min=str(data.get("usage_min", "0")), usage_max=str(data.get("usage_max", "300000")),
-                body_status=data.get("body_status") or ["ALL_POSSIBLE_OPTIONS"],
-                chassis_status=data.get("chassis_status"),
-                motor_status=data.get("motor_status") or ["ALL_POSSIBLE_OPTIONS"],
-                gearbox=data.get("gearbox") or ["ALL_POSSIBLE_OPTIONS"],
-                fuel_type=data.get("fuel_type") or ["ALL_POSSIBLE_OPTIONS"],
-                color=data.get("color") or ["ALL_POSSIBLE_OPTIONS"],
-                origin=data.get("origin") or ["ALL_POSSIBLE_OPTIONS"],
-                sort=data.get("sort", "sort_date"),
-            )
-        with SEARCH_SEMAPHORE:
-            raw = search_divar(payload)
-        ads = [a for a in extract_ads(raw) if is_model_match(a.get("title", ""), model)]
+        payload = build_payload_for_model(category, model, city_ids, recent_ads, data)
+        ads = [a for a in fetch_divar_pages(payload, max_pages=max_pages)
+               if is_model_match(a.get("title", ""), model)]
         return model, None, ads
     except Exception as e:
         print(f"normal model error {model}:", e)
@@ -934,8 +1256,10 @@ def process_model_normal(model, category, city_ids, recent_ads, data):
 # ====================== منطق جستجو ======================
 def run_search_logic(data: dict) -> dict:
     category = data.get("category", "mobile")
-    city_ids = [data.get("city", "5")]
-    recent_ads = data.get("recent_ads", "1d")
+    city_id = str(data.get("city", "5") or "5")
+    city_ids = [city_id]
+    recent_ads = data.get("recent_ads") or None
+    query = (data.get("query") or "").strip()
     selected_models = data.get("models") or []
     smart_search = data.get("smart_search", False)
     smart_avg = data.get("smart_avg", False)
@@ -963,20 +1287,42 @@ def run_search_logic(data: dict) -> dict:
 
     if smart_search:
         model_info = {}
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-            futures = [
-                ex.submit(process_model_smart, m, category, city_ids, recent_ads,
-                          data.get("business_type", "ALL"), min_smart_score)
-                for m in models_to_search
-            ]
-            for fut in as_completed(futures):
-                model, info, best = fut.result()
-                if info:
-                    model_info[model] = info
-                for ad in best:
-                    if ad["token"] not in seen:
-                        seen.add(ad["token"])
-                        all_ads.append(ad)
+        if query:
+            # With a free-text query, Divar already returns the full matching
+            # set in one paginated query. Score against the whole result set
+            # rather than the small per-model slices.
+            payload = build_query_payload(category, city_ids, query, recent_ads, data)
+            ads = fetch_divar_pages(payload, max_pages=SEARCH_RESULT_PAGES)
+            score_fn = mobile_value_score if category == "mobile" else car_value_score
+            prices = [a["price_num"] for a in ads if a.get("price_num")]
+            if prices:
+                avg = clean_avg(prices)
+                model_info[query] = {"avg": int(avg), "count": len(ads)}
+                for ad in ads:
+                    if not ad.get("price_num"):
+                        continue
+                    sc = score_fn(ad, avg)
+                    if sc >= min_smart_score:
+                        ad["value_score"] = sc
+                        ad["model_avg"] = int(avg)
+                        if ad["token"] not in seen:
+                            seen.add(ad["token"])
+                            all_ads.append(ad)
+        else:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+                futures = [
+                    ex.submit(process_model_smart, m, category, city_ids, recent_ads,
+                              data.get("business_type", "ALL"), min_smart_score, 1)
+                    for m in models_to_search
+                ]
+                for fut in as_completed(futures):
+                    model, info, best = fut.result()
+                    if info:
+                        model_info[model] = info
+                    for ad in best:
+                        if ad["token"] not in seen:
+                            seen.add(ad["token"])
+                            all_ads.append(ad)
 
         all_ads = finalize_ads(all_ads, keywords, negative_keywords)
         all_ads.sort(key=lambda x: (not x.get("has_keyword", False), -(x.get("value_score") or 0)))
@@ -988,16 +1334,32 @@ def run_search_logic(data: dict) -> dict:
 
     elif smart_avg:
         model_averages = {}
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-            futures = [ex.submit(process_model_avg, m, category, city_ids, recent_ads, data) for m in models_to_search]
-            for fut in as_completed(futures):
-                model, avg, picked = fut.result()
-                if avg is not None:
-                    model_averages[model] = avg
-                for ad in picked:
-                    if ad["token"] not in seen:
-                        seen.add(ad["token"])
-                        all_ads.append(ad)
+        if query:
+            payload = build_query_payload(category, city_ids, query, recent_ads, data)
+            ads = fetch_divar_pages(payload, max_pages=SEARCH_RESULT_PAGES)
+            prices = [a["price_num"] for a in ads if a.get("price_num")]
+            if prices:
+                avg = clean_avg(prices)
+                model_averages[query] = int(avg)
+                for ad in ads:
+                    if ad.get("price_num") and (avg * 0.3) <= ad["price_num"] < avg:
+                        if ad["token"] not in seen:
+                            seen.add(ad["token"])
+                            all_ads.append(ad)
+        else:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+                futures = [
+                    ex.submit(process_model_avg, m, category, city_ids, recent_ads, data, 1)
+                    for m in models_to_search
+                ]
+                for fut in as_completed(futures):
+                    model, avg, picked = fut.result()
+                    if avg is not None:
+                        model_averages[model] = avg
+                    for ad in picked:
+                        if ad["token"] not in seen:
+                            seen.add(ad["token"])
+                            all_ads.append(ad)
 
         all_ads = finalize_ads(all_ads, keywords, negative_keywords)
         return {
@@ -1007,14 +1369,70 @@ def run_search_logic(data: dict) -> dict:
         }
 
     else:
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-            futures = [ex.submit(process_model_normal, m, category, city_ids, recent_ads, data) for m in models_to_search]
-            for fut in as_completed(futures):
-                model, _, ads = fut.result()
-                for ad in ads:
-                    if ad["token"] not in seen:
-                        seen.add(ad["token"])
-                        all_ads.append(ad)
+        # A free-text query is exactly how Divar's own search bar behaves
+        # (e.g. «پراید 132» with just category set). One paginated query —
+        # cursor driven via previous_place_ids — returns the full result set.
+        if query:
+            payload = build_search_payload(
+                category,
+                city_ids,
+                query=query,
+                recent_ads=recent_ads,
+                sort=data.get("sort", "sort_date"),
+                has_photo=True if data.get("has_photo") else None,
+                has_installment=True if data.get("has_installment") else None,
+                has_video=True if data.get("has_video") else None,
+                business_type=data.get("business_type", "ALL"),
+                min_price=data.get("min_price") or None,
+                max_price=data.get("max_price") or None,
+                status=data.get("status"),
+                internal_storage=data.get("internal_storage"),
+                ram_memory=data.get("ram_memory"),
+                sim_card_slot=data.get("sim_card_slot"),
+                base_color=data.get("base_color"),
+                year_min=data.get("year_min") or None,
+                year_max=data.get("year_max") or None,
+                usage_min=data.get("usage_min") or None,
+                usage_max=data.get("usage_max") or None,
+                body_status=data.get("body_status"),
+                chassis_status=data.get("chassis_status"),
+                motor_status=data.get("motor_status"),
+                gearbox=data.get("gearbox"),
+                fuel_type=data.get("fuel_type"),
+                color=data.get("color"),
+                origin=data.get("origin"),
+            )
+            all_ads = fetch_divar_pages(payload, max_pages=SEARCH_RESULT_PAGES)
+        elif not selected_models:
+            # When the user has not selected specific models, behave like Divar's
+            # normal category page: one broad paginated query instead of hundreds of
+            # tiny per-model calls. That is what returns 100+ listings by default.
+            category_slug = "mobile-phones" if category == "mobile" else "light"
+
+            # The completely default case should match Divar's normal category page.
+            # The legacy endpoint has stable pagination and best reproduces that volume.
+            if is_broad_unfiltered_search(category, recent_ads, data):
+                all_ads = fetch_legacy_pages(city_id, category_slug, SEARCH_RESULT_PAGES)
+            else:
+                payload = build_payload_for_model(
+                    category, model=None, city_ids=city_ids, recent_ads=recent_ads, data=data
+                )
+                all_ads = fetch_divar_pages(payload, max_pages=SEARCH_RESULT_PAGES)
+
+                if not all_ads:
+                    all_ads = fetch_legacy_pages(city_id, category_slug, SEARCH_RESULT_PAGES)
+        else:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+                futures = [
+                    ex.submit(process_model_normal, m, category, city_ids, recent_ads, data, 2)
+                    for m in models_to_search
+                ]
+                for fut in as_completed(futures):
+                    model, _, ads = fut.result()
+                    for ad in ads:
+                        if ad["token"] not in seen:
+                            seen.add(ad["token"])
+                            all_ads.append(ad)
 
         all_ads = finalize_ads(all_ads, keywords, negative_keywords)
         return {

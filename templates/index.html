@@ -316,6 +316,12 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
       </div>
 
       <div class="module module-keyword">
+        <label for="query" style="color:#5347B0;">🔍 جستجوی آزاد</label>
+        <input type="text" id="query" class="neo-input" placeholder="مثلاً پراید 132، آیفون ۱۳، گلکسی S24">
+        <small>مثل جستجوی معمولی دیوار عمل می‌کند؛ اگر مدل خاصی انتخاب نکنی، نتایج کلی همین متن برمی‌گردد.</small>
+      </div>
+
+      <div class="module module-keyword">
         <label for="keywords" style="color:#9c7415;">🔑 کلمات کلیدی</label>
         <input type="text" id="keywords" class="neo-input" placeholder="پلمپ, بدون رنگ, موتور سالم, گارانتی">
         <small>با ویرگول جدا کنید — آگهی‌های دارای این کلمات اولویت می‌گیرند</small>
@@ -348,8 +354,9 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
         <div class="field">
           <label for="recent_ads">زمان آگهی</label>
           <select id="recent_ads" class="neo-select">
+            <option value="" selected>همه آگهی‌ها</option>
             <option value="3h">۳ ساعت</option>
-            <option value="1d" selected>۲۴ ساعت</option>
+            <option value="1d">۲۴ ساعت</option>
             <option value="2d">۲ روز</option>
             <option value="7d">۱ هفته</option>
           </select>
@@ -368,8 +375,8 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
       <div class="normal-filters" id="mobileFilters">
         <hr class="split">
         <div class="field-grid">
-          <div class="field"><label for="min_price_mobile">حداقل قیمت</label><input type="number" id="min_price_mobile" class="neo-input" value="1000000"></div>
-          <div class="field"><label for="max_price_mobile">حداکثر قیمت</label><input type="number" id="max_price_mobile" class="neo-input" value="900000000"></div>
+          <div class="field"><label for="min_price_mobile">حداقل قیمت</label><input type="number" id="min_price_mobile" class="neo-input" placeholder="بدون محدودیت"></div>
+          <div class="field"><label for="max_price_mobile">حداکثر قیمت</label><input type="number" id="max_price_mobile" class="neo-input" placeholder="بدون محدودیت"></div>
           <div class="field">
             <label for="sort_mobile">مرتب‌سازی</label>
             <select id="sort_mobile" class="neo-select">
@@ -380,8 +387,8 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
           </div>
         </div>
         <div class="check-row-flex">
-          <label class="plain-check"><input type="checkbox" id="has_photo_mobile" checked><span>عکس‌دار</span></label>
-          <label class="plain-check"><input type="checkbox" id="has_installment_mobile"><span>اقساطی</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_photo_mobile"><span>فقط عکس‌دار</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_installment_mobile"><span>فقط اقساطی</span></label>
         </div>
         <div class="chip-group-wrap">
           <label>وضعیت</label>
@@ -441,12 +448,12 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
       <div class="normal-filters" id="carFilters" style="display:none;">
         <hr class="split">
         <div class="field-grid">
-          <div class="field"><label for="min_price_car">حداقل قیمت</label><input type="number" id="min_price_car" class="neo-input" value="100000000"></div>
-          <div class="field"><label for="max_price_car">حداکثر قیمت</label><input type="number" id="max_price_car" class="neo-input" value="5000000000"></div>
-          <div class="field"><label for="year_min">سال از</label><input type="number" id="year_min" class="neo-input" value="1390"></div>
-          <div class="field"><label for="year_max">سال تا</label><input type="number" id="year_max" class="neo-input" value="1404"></div>
-          <div class="field"><label for="usage_min">کارکرد از</label><input type="number" id="usage_min" class="neo-input" value="0"></div>
-          <div class="field"><label for="usage_max">کارکرد تا</label><input type="number" id="usage_max" class="neo-input" value="300000"></div>
+          <div class="field"><label for="min_price_car">حداقل قیمت</label><input type="number" id="min_price_car" class="neo-input" placeholder="بدون محدودیت"></div>
+          <div class="field"><label for="max_price_car">حداکثر قیمت</label><input type="number" id="max_price_car" class="neo-input" placeholder="بدون محدودیت"></div>
+          <div class="field"><label for="year_min">سال از</label><input type="number" id="year_min" class="neo-input" placeholder="بدون محدودیت"></div>
+          <div class="field"><label for="year_max">سال تا</label><input type="number" id="year_max" class="neo-input" placeholder="بدون محدودیت"></div>
+          <div class="field"><label for="usage_min">کارکرد از</label><input type="number" id="usage_min" class="neo-input" placeholder="بدون محدودیت"></div>
+          <div class="field"><label for="usage_max">کارکرد تا</label><input type="number" id="usage_max" class="neo-input" placeholder="بدون محدودیت"></div>
           <div class="field">
             <label for="sort_car">مرتب‌سازی</label>
             <select id="sort_car" class="neo-select">
@@ -457,9 +464,9 @@ table.history-table tbody tr td:last-child{ border-top-left-radius:var(--radius-
           </div>
         </div>
         <div class="check-row-flex">
-          <label class="plain-check"><input type="checkbox" id="has_photo_car" checked><span>عکس‌دار</span></label>
-          <label class="plain-check"><input type="checkbox" id="has_video_car"><span>ویدیو</span></label>
-          <label class="plain-check"><input type="checkbox" id="has_installment_car"><span>اقساطی</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_photo_car"><span>فقط عکس‌دار</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_video_car"><span>فقط ویدیو</span></label>
+          <label class="plain-check"><input type="checkbox" id="has_installment_car"><span>فقط اقساطی</span></label>
         </div>
         <div class="chip-group-wrap">
           <label>وضعیت بدنه</label>
@@ -620,6 +627,7 @@ function buildSettings() {
   const isMobile = currentCategory === 'mobile';
   const settings = {
     category: currentCategory,
+    query: document.getElementById('query').value,
     city: document.getElementById('city').value,
     recent_ads: document.getElementById('recent_ads').value,
     models: isMobile ? getChecked('.model-check-mobile') : getChecked('.model-check-car'),
